@@ -144,7 +144,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 const $=id=>document.getElementById(id);
 const stage=$('stage');
 const renderer=new THREE.WebGLRenderer({antialias:false});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,3));
 renderer.outputEncoding=THREE.sRGBEncoding;
 stage.appendChild(renderer.domElement);
 const scene=new THREE.Scene();
@@ -279,7 +279,7 @@ function attachVideo(src,remote){
   video.onloadeddata=()=>{
     if(videoTex)videoTex.dispose();
     videoTex=new THREE.VideoTexture(video);videoTex.encoding=THREE.sRGBEncoding;
-    videoTex.minFilter=THREE.LinearFilter;videoTex.generateMipmaps=false;
+    videoTex.minFilter=THREE.LinearFilter;videoTex.magFilter=THREE.LinearFilter;videoTex.generateMipmaps=false;videoTex.anisotropy=renderer.capabilities.getMaxAnisotropy();
     mat.map=videoTex;mat.color.set(0xffffff);mat.needsUpdate=true;usingSample=false;$('srcLabel').hidden=true;$('connecting').hidden=true;
   };
   video.onerror=()=>{$('connecting').hidden=true;if(remote&&!videoTex){mat.map=sampleTex;mat.color.set(0xffffff);mat.needsUpdate=true;usingSample=true;$('srcLabel').hidden=false;}
@@ -316,11 +316,15 @@ $('sound').onclick=()=>{video.muted=!video.muted;$('sound').textContent='音声�
 $('playPause').onclick=()=>{if(video.paused){if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}video.play().catch(()=>{});$('playPause').textContent='一時停止';}else{video.pause();$('playPause').textContent='再生';}};
 
 /* ---------- 視点の状態 ---------- */
-const st={lon:180,lat:0,tLon:180,tLat:0,fov:70,tFov:70,vLon:0,vLat:0,front:180};
+/* 縦持ちは横の視野が狭く拡大されすぎるので、初期の画角を広めにする */
+const isPortrait=()=>innerHeight>innerWidth;
+const baseFov=()=>isPortrait()?95:70;
+const st={lon:180,lat:0,tLon:180,tLat:0,fov:baseFov(),tFov:baseFov(),vLon:0,vLat:0,front:180};
+let wasPortrait=isPortrait();
 const cfg={lag:.55,tiltMin:-45,tiltMax:45,inertia:true};
 const clampLat=v=>Math.max(cfg.tiltMin,Math.min(cfg.tiltMax,v));
 
-const FOV_MIN=20,FOV_MAX=100;const clampFov=v=>Math.max(FOV_MIN,Math.min(FOV_MAX,v));
+const FOV_MIN=20,FOV_MAX=110;const clampFov=v=>Math.max(FOV_MIN,Math.min(FOV_MAX,v));
 const pointers=new Map();let pinchStart=0,fovStart=70,lastMove=0;
 function dragBy(dx,dy){
   const k=st.fov/stage.clientHeight;const dLon=-dx*k,dLat=dy*k;
@@ -389,7 +393,7 @@ $('liveOn').onchange=e=>$('liveBadge').hidden=!e.target.checked;
 $('hudOn').onchange=e=>document.body.classList.toggle('hidden-ui',!e.target.checked);
 $('camInput').oninput=e=>$('camName').textContent=e.target.value;
 $('setFront').onclick=()=>{st.front=((st.tLon%360)+360)%360;toast('今の向きを正面（PAN 0°）にしました');};
-$('resetView').onclick=()=>{st.tLon=st.front+Math.round((st.tLon-st.front)/360)*360;st.tLat=0;st.tFov=70;st.vLon=st.vLat=0;closeSheet();};
+$('resetView').onclick=()=>{st.tLon=st.front+Math.round((st.tLon-st.front)/360)*360;st.tLat=0;st.tFov=baseFov();st.vLon=st.vLat=0;closeSheet();};
 
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2400);}
 
@@ -400,7 +404,7 @@ const strip=$('compassStrip');const PX=2.2;
   h+=`<span class="${n%90===0?'major':''}" style="left:${(a+540)*PX}px">${lab}</span>`;}strip.innerHTML=h;})();
 
 /* ---------- ループ ---------- */
-function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+function resize(){const p=isPortrait();if(p!==wasPortrait){st.tFov=clampFov(st.tFov*(p?95/70:70/95));wasPortrait=p;}const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
 window.addEventListener('resize',resize);resize();
 const fmt=(v,w,d)=>(v>=0?'+':'-')+Math.abs(v).toFixed(d).padStart(w,'0');
 const target=new THREE.Vector3();let prev=performance.now(),sampleT=0;
@@ -419,7 +423,7 @@ function frame(now){
   if(usingSample){sampleT+=dt;drawSample(sampleT);sampleTex.needsUpdate=true;}
   renderer.render(scene,camera);
   let pan=((st.lon-st.front)%360+540)%360-180;
-  $('pan').textContent=fmt(pan,5,1)+'°';$('tilt').textContent=fmt(st.lat,4,1)+'°';$('zoom').textContent=(70/st.fov).toFixed(1)+'x';
+  $('pan').textContent=fmt(pan,5,1)+'°';$('tilt').textContent=fmt(st.lat,4,1)+'°';$('zoom').textContent=(baseFov()/st.fov).toFixed(1)+'x';
   strip.style.transform=`translateX(${-(pan+540)*PX+strip.parentElement.clientWidth/2}px)`;
   requestAnimationFrame(frame);
 }
