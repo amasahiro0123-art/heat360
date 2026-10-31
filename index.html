@@ -48,7 +48,7 @@ button:focus-visible,.filebtn:focus-within,input:focus-visible{outline:2px solid
 #gear{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));width:42px;height:42px;padding:0;display:grid;place-items:center;border-radius:50%}
 #gear svg{width:20px;height:20px}
 /* ジョイスティック */
-#connecting{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--mono);font-size:13px;letter-spacing:.1em;color:var(--dim);pointer-events:none;z-index:2;animation:pulse 1.4s ease-in-out infinite}
+#connecting{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);font-family:Meiryo,"メイリオ","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;font-size:20px;font-weight:700;letter-spacing:.06em;white-space:nowrap;color:var(--fg);pointer-events:none;z-index:2;animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.35}}
 #frame{position:fixed;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;z-index:1}
 .hud,#compass,#reticle,#gear,#joy,#zoomBtns{z-index:2}
@@ -110,7 +110,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 <div id="zoomBtns"><button id="zin" aria-label="ズームイン">＋</button><button id="zout" aria-label="ズームアウト">－</button></div>
 <div id="joy" aria-label="カメラの向きを操作するジョイスティック"><div id="knob"></div></div>
 <div id="toast" role="status"></div>
-<div id="connecting">映像に接続中…</div>
+<div id="connecting">Heater CAMに接続中…</div>
 <button id="start" hidden>タップして視聴を開始</button>
 
 <section id="sheet" aria-label="設定">
