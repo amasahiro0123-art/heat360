@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>360 リモートカメラ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;700&display=swap">
+<style>
+:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+/* 全画面ビューア。HUDは四隅、操作は下部。カメラの業務用モニターを意識した単一ダークテーマ */
+:root{
+  --bg:#07090b; --fg:#e8eef0; --dim:#8a979c; --panel:rgba(12,16,19,.86);
+  --line:rgba(232,238,240,.18); --accent:#59d6c4; --live:#ff3b3b;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --sans:"Noto Sans JP","Hiragino Sans",system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);overflow:hidden;overscroll-behavior:none}
+#stage{position:fixed;inset:0;touch-action:none;cursor:grab}
+#stage:active{cursor:grabbing}
+#stage canvas{display:block;width:100%;height:100%}
+.hud{position:fixed;pointer-events:none;font-family:var(--mono);font-size:12px;letter-spacing:.04em;text-shadow:0 1px 2px rgba(0,0,0,.8);font-variant-numeric:tabular-nums}
+.tl{top:calc(12px + env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:4px}
+.tr{top:calc(12px + env(safe-area-inset-top,0px));right:calc(max(16px,env(safe-area-inset-right,0px)) + 52px);text-align:right;display:flex;flex-direction:column;gap:4px}
+.bl{bottom:calc(16px + env(safe-area-inset-bottom,0px));left:max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:3px}
+.live{display:inline-flex;align-items:center;gap:6px;font-weight:600;background:rgba(0,0,0,.45);padding:3px 8px 3px 7px;border-radius:3px;width:max-content}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--live);animation:blink 1.2s steps(2,start) infinite}
+@keyframes blink{to{visibility:hidden}}
+.dim{color:var(--dim)}
+.val{color:var(--fg)}
+.sample{color:#f5c26b}
+/* 画面中央のレティクル */
+#reticle{position:fixed;left:50%;top:50%;width:46px;height:46px;transform:translate(-50%,-50%);pointer-events:none;opacity:.55}
+#reticle::before,#reticle::after{content:"";position:absolute;background:var(--fg)}
+#reticle::before{left:50%;top:0;bottom:0;width:1px}
+#reticle::after{top:50%;left:0;right:0;height:1px}
+/* コンパス */
+#compass{position:fixed;left:50%;transform:translateX(-50%);top:calc(14px + env(safe-area-inset-top,0px));width:min(220px,46vw);height:22px;overflow:hidden;pointer-events:none;border-bottom:1px solid var(--line);-webkit-mask-image:linear-gradient(90deg,transparent,#000 20%,#000 80%,transparent);mask-image:linear-gradient(90deg,transparent,#000 20%,#000 80%,transparent)}
+#compassStrip{position:absolute;top:0;left:0;height:100%;white-space:nowrap;font-family:var(--mono);font-size:10px;color:var(--dim)}
+#compassStrip span{position:absolute;top:2px;transform:translateX(-50%)}
+#compassStrip span.major{color:var(--fg)}
+#compass::after{content:"";position:absolute;left:50%;bottom:0;width:0;height:0;border:4px solid transparent;border-bottom-color:var(--accent);transform:translateX(-50%)}
+/* ボタン */
+button,.filebtn{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,.filebtn:focus-within,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#gear{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));width:42px;height:42px;padding:0;display:grid;place-items:center;border-radius:50%}
+#gear svg{width:20px;height:20px}
+/* ジョイスティック */
+#joy{position:fixed;right:calc(max(16px,env(safe-area-inset-right,0px)) + 8px);bottom:calc(24px + env(safe-area-inset-bottom,0px));width:116px;height:116px;border-radius:50%;border:1px solid var(--line);background:rgba(12,16,19,.45);touch-action:none}
+#joy::before{content:"";position:absolute;inset:50% auto auto 50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--line)}
+#knob{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px;border-radius:50%;background:rgba(232,238,240,.18);border:1px solid rgba(232,238,240,.5);transition:transform .15s}
+#joy.active #knob{transition:none;background:rgba(89,214,196,.35);border-color:var(--accent)}
+/* 設定シート */
+#sheet{position:fixed;left:0;right:0;bottom:0;max-height:78%;overflow-y:auto;background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px calc(20px + env(safe-area-inset-bottom,0px));transform:translateY(105%);transition:transform .28s ease;z-index:20}
+#sheet.open{transform:none}
+.sheet-in{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.sheet-head h2{margin:0;font-size:16px}
+.filebtn{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#06201c;font-weight:700;border-color:transparent;position:relative}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px}
+.row small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
+.row input[type=range]{width:46%;accent-color:var(--accent)}
+.switch{appearance:none;-webkit-appearance:none;width:44px;height:26px;border-radius:13px;background:#2a3337;position:relative;cursor:pointer;flex:none;transition:background .2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--fg);transition:transform .2s}
+.switch:checked{background:var(--accent)}
+.switch:checked::after{transform:translateX(18px)}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.note{font-size:12px;color:var(--dim);line-height:1.7;margin:0}
+hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
+#toast{position:fixed;left:50%;bottom:calc(160px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:8px 14px;border-radius:8px;font-size:13px;max-width:calc(100% - 32px);opacity:0;transition:opacity .25s;pointer-events:none;z-index:30}
+#toast.show{opacity:1}
+#start{position:fixed;inset:0;margin:auto;width:max-content;height:max-content;padding:16px 26px;font-size:16px;font-weight:700;background:var(--accent);color:#06201c;border:0;border-radius:999px;z-index:25}
+.hidden-ui .hud,.hidden-ui #compass,.hidden-ui #reticle{display:none}
+@media (prefers-reduced-motion:reduce){.live i{animation:none}#sheet{transition:none}}
+</style>
+
+<div id="stage" aria-label="360度映像。ドラッグで向きを変え、ピンチでズームします"></div>
+<div id="reticle"></div>
+<div id="compass"><div id="compassStrip"></div></div>
+
+<div class="hud tl">
+  <span class="live" id="liveBadge"><i></i>LIVE</span>
+  <span id="camName">CAM-01 ・ 360°</span>
+  <span class="sample" id="srcLabel">サンプル映像</span>
+</div>
+<div class="hud tr">
+  <span id="clock" class="val">--:--:--</span>
+  <span class="dim" id="date">----/--/--</span>
+</div>
+<div class="hud bl">
+  <span><span class="dim">PAN </span><span class="val" id="pan">+000.0°</span></span>
+  <span><span class="dim">TILT</span> <span class="val" id="tilt">+00.0°</span></span>
+  <span><span class="dim">ZOOM</span> <span class="val" id="zoom">1.0x</span></span>
+</div>
+
+<button id="gear" aria-label="設定を開く">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>
+</button>
+
+<div id="joy" aria-label="カメラの向きを操作するジョイスティック"><div id="knob"></div></div>
+<div id="toast" role="status"></div>
+<button id="start" hidden>タップして視聴を開始</button>
+
+<section id="sheet" aria-label="設定">
+  <div class="sheet-in">
+    <div class="sheet-head"><h2>カメラ設定</h2><button id="closeSheet">閉じる</button></div>
+    <label class="filebtn">Insta360の動画を読み込む<input type="file" id="file" accept="video/*"></label>
+    <div id="clipBox" hidden><div style="font-size:14px;margin-bottom:8px">映像を切り替える</div><div class="btns" id="clipList"></div></div>
+    <p class="note">Insta360 Studioで「360°動画」として書き出したもの（横:縦＝2:1）を選んでください。スマホでは4K（3840×1920）・H.264が安定します。</p>
+    <div class="btns">
+      <button id="setFront">今の向きを正面にする</button>
+      <button id="resetView">正面に戻す</button>
+      <button id="sound">音声：オフ</button>
+      <button id="playPause">一時停止</button>
+    </div>
+    <hr>
+    <div class="row"><div>操作の重さ<small>重いほどカメラが首を振るように遅れて動く</small></div><input type="range" id="lag" min="0" max="100" value="55"></div>
+    <div class="row"><div>下向きの限界<small>自撮り棒が映らない角度で止める</small></div><input type="range" id="tiltMin" min="-90" max="0" value="-45"></div>
+    <div class="row"><div>上向きの限界</div><input type="range" id="tiltMax" min="0" max="90" value="45"></div>
+    <div class="row"><div>指を離した後も少し流れる</div><input type="checkbox" class="switch" id="inertia" checked></div>
+    <div class="row"><div>ジョイスティック</div><input type="checkbox" class="switch" id="joyOn" checked></div>
+    <div class="row"><div>LIVE表示</div><input type="checkbox" class="switch" id="liveOn" checked></div>
+    <div class="row"><div>画面の文字表示（HUD）</div><input type="checkbox" class="switch" id="hudOn" checked></div>
+    <div class="row"><div>カメラ名</div><input type="text" id="camInput" value="CAM-01 ・ 360°" style="width:46%;font:inherit;color:var(--fg);background:#1a2125;border:1px solid var(--line);border-radius:6px;padding:6px 8px"></div>
+    <p class="note">公開URLで開くと、全員の再生位置が現在時刻に合わせて同期されます（一時停止しても再開時に今の位置へ戻ります）。<br>操作：1本指でスワイプして向きを変える／2本指でピンチしてズーム／ジョイスティックで首振り。</p>
+  </div>
+</section>
+
+<script src="config.js"></script>
+<script src="three.min.js"></script>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const stage=$('stage');
+const renderer=new THREE.WebGLRenderer({antialias:false});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.outputEncoding=THREE.sRGBEncoding;
+stage.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(70,1,1,1100);
+const geo=new THREE.SphereGeometry(500,64,40); geo.scale(-1,1,1);
+const mat=new THREE.MeshBasicMaterial();
+scene.add(new THREE.Mesh(geo,mat));
+
+/* ---------- サンプル映像（3D空間を正距円筒図法に正しく投影して描く） ---------- */
+const W=2048,H=1024;
+const CAM_H=8; // カメラはスタンド上、地面から8m
+function proj(x,y,z){ // カメラ原点の3D座標 → 360°画像上の座標
+  let lon=Math.atan2(z,x); if(lon<0)lon+=Math.PI*2;
+  const lat=Math.atan2(y,Math.hypot(x,z));
+  return [lon/(Math.PI*2)*W,(0.5-lat/Math.PI)*H];
+}
+function path3(ctx,pts,close){ // 直線を細かく分割して投影（曲がり方が正しくなる）
+  ctx.beginPath();let first=true;
+  const n=pts.length, segs=close?n:n-1;
+  for(let i=0;i<segs;i++){const a=pts[i],b=pts[(i+1)%n];
+    for(let s=0;s<=24;s++){const t=s/24;const p=proj(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t);
+      if(first){ctx.moveTo(p[0],p[1]);first=false;}else ctx.lineTo(p[0],p[1]);}}
+  if(close)ctx.closePath();
+}
+const G=-CAM_H, PX0=-75, PX1=-5, PZ=50; // ピッチ：正面方向(−x)に奥行き70m、横幅100m
+const base=document.createElement('canvas');base.width=W;base.height=H;
+const bctx=base.getContext('2d');
+(function drawBase(){
+  const c=bctx;
+  const g=c.createLinearGradient(0,0,0,H/2);g.addColorStop(0,'#0b1730');g.addColorStop(1,'#3d5f86');
+  c.fillStyle=g;c.fillRect(0,0,W,H/2);
+  // 地面（芝のエプロン）と足元のスタンド
+  c.fillStyle='#24602e';c.fillRect(0,H/2,W,H/2);
+  const footV=(0.5+60/180)*H; const fg=c.createLinearGradient(0,footV-40,0,H);
+  fg.addColorStop(0,'rgba(30,34,42,0)');fg.addColorStop(.15,'#262c38');fg.addColorStop(1,'#14171d');
+  c.fillStyle=fg;c.fillRect(0,footV-40,W,H-footV+40);
+  // 周囲のスタンド（一定の高さの帯は正距円筒でも水平な帯になる）
+  const sTop=(0.5-12/180)*H,sBot=(0.5+6/180)*H;
+  c.fillStyle='#262c38';c.fillRect(0,sTop,W,sBot-sTop);
+  let s=7;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647};
+  const cols=['#d84a4a','#e8e8e8','#3a6fd8','#f2c14e','#5b5f6b','#8b2d2d'];
+  for(let y=sTop+4;y<sBot-3;y+=6)for(let x=0;x<W;x+=5){if(rnd()<.8){c.fillStyle=cols[(rnd()*cols.length)|0];c.fillRect(x+rnd()*2,y,3,3);}}
+  // 照明塔（鉛直線は経線なので縦にまっすぐ）
+  for(let i=0;i<8;i++){const x=W*(i+.5)/8;c.fillStyle='#1b2433';c.fillRect(x-2,(0.5-30/180)*H,4,18/180*H);
+    c.fillStyle='#fff8d8';c.shadowColor='#fff3b0';c.shadowBlur=30;c.fillRect(x-18,(0.5-31/180)*H,36,10);c.shadowBlur=0;}
+  // ピッチ（芝目の縞）
+  for(let i=0;i<10;i++){const z0=-PZ+i*10,z1=z0+10;
+    c.fillStyle=i%2?'#2b7436':'#33853f';
+    path3(c,[[PX0,G,z0],[PX1,G,z0],[PX1,G,z1],[PX0,G,z1]],true);c.fill();}
+  // ライン
+  c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=3;c.lineJoin='round';
+  path3(c,[[PX0,G,-PZ],[PX1,G,-PZ],[PX1,G,PZ],[PX0,G,PZ]],true);c.stroke();
+  [0,-28,28].forEach(z=>{path3(c,[[PX0,G,z],[PX1,G,z]]);c.stroke();});
+  c.setLineDash([10,10]);[-40,40].forEach(z=>{path3(c,[[PX0,G,z],[PX1,G,z]]);c.stroke();});c.setLineDash([]);
+  // ゴールポスト（H型）
+  c.lineWidth=4;
+  [-PZ,PZ].forEach(z=>{const xm=(PX0+PX1)/2;
+    [xm-2.8,xm+2.8].forEach(x=>{path3(c,[[x,G,z],[x,G+16,z]]);c.stroke();});
+    path3(c,[[xm-2.8,G+3,z],[xm+2.8,G+3,z]]);c.stroke();});
+  // スコアボード（右後方）
+  const sb0=(225/360)*W,sb1=(255/360)*W,sv0=(0.5-26/180)*H,sv1=(0.5-15/180)*H;
+  c.fillStyle='#0d0f12';c.fillRect(sb0,sv0,sb1-sb0,sv1-sv0);c.strokeStyle='#59d6c4';c.lineWidth=2;c.strokeRect(sb0,sv0,sb1-sb0,sv1-sv0);
+  c.textAlign='center';c.fillStyle='#ffd166';c.font='600 22px "IBM Plex Mono",monospace';c.fillText('HOME 12 - 7 AWAY',(sb0+sb1)/2,sv0+26);
+  c.fillStyle='#e8eef0';c.font='18px "IBM Plex Mono",monospace';c.fillText("2nd  54'",(sb0+sb1)/2,sv0+50);
+  // 方向ラベル
+  c.font='600 22px "IBM Plex Mono",monospace';c.fillStyle='rgba(255,255,255,.7)';
+  [['正面',1024],['右',1536],['後ろ',12],['後ろ',2036],['左',512]].forEach(([t,x])=>c.fillText(t,x,(0.5-14/180)*H));
+})();
+const live=document.createElement('canvas');live.width=W;live.height=H;
+const lctx=live.getContext('2d');
+const players=[...Array(16)].map((_,i)=>({team:i%2,ph:Math.random()*6.28,sp:.4+Math.random()*.5,x:PX0+8+Math.random()*(PX1-PX0-16),z:-35+Math.random()*70}));
+function figure(x,z,color,hgt){ // 足元と頭を投影して大きさも距離に応じて変わる
+  const f=proj(x,G,z),h=proj(x,G+hgt,z);const hpx=f[1]-h[1],w=Math.max(2,hpx*.32);
+  lctx.fillStyle='rgba(0,0,0,.3)';lctx.beginPath();lctx.ellipse(f[0],f[1],w*.9,w*.3,0,0,7);lctx.fill();
+  lctx.fillStyle=color;lctx.fillRect(f[0]-w/2,h[1]+hpx*.2,w,hpx*.8);
+  lctx.fillStyle='#f0d2b4';lctx.beginPath();lctx.arc(f[0],h[1]+hpx*.1,Math.max(1.5,w*.4),0,7);lctx.fill();
+}
+function drawSample(t){
+  lctx.drawImage(base,0,0);
+  const bx=-40+Math.sin(t*.7)*18, bz=Math.sin(t*.3)*30;
+  const list=players.map(p=>({x:p.x+(bx-p.x)*.35+Math.sin(t*p.sp+p.ph)*4,z:p.z+(bz-p.z)*.35+Math.cos(t*p.sp*1.3+p.ph)*5,c:p.team?'#3a6fd8':'#d84a4a'}));
+  list.sort((a,b)=>a.x-b.x); // 遠い順に描く
+  list.forEach(p=>figure(p.x,p.z,p.c,1.85));
+  const b=proj(bx,G+.15,bz),b2=proj(bx,G+.45,bz);const r=Math.max(2,(b[1]-b2[1])*.8);
+  lctx.fillStyle='#fff';lctx.beginPath();lctx.ellipse(b[0],b[1],r*1.3,r,0,0,7);lctx.fill();
+}
+const sampleTex=new THREE.CanvasTexture(live);sampleTex.encoding=THREE.sRGBEncoding;
+mat.map=sampleTex;
+let usingSample=true;
+
+/* ---------- 動画 ---------- */
+const video=document.createElement('video');
+video.muted=true;video.loop=true;video.playsInline=true;video.setAttribute('playsinline','');video.crossOrigin='anonymous';
+let videoTex=null,objUrl=null;
+/* ---------- 設定（config.js または URLの ?v=ファイル名 で上書き） ---------- */
+const CONFIG=Object.assign({video:'video.mp4',sync:true,epoch:'2026-01-01T00:00:00+09:00',camName:null},window.CAM360_CONFIG||{});
+const qp=new URLSearchParams(location.search);
+if(qp.get('v'))CONFIG.video=qp.get('v');
+if(qp.get('sync')==='0')CONFIG.sync=false;
+if(CONFIG.camName){$('camName').textContent=CONFIG.camName;$('camInput').value=CONFIG.camName;}
+const EPOCH=Date.parse(CONFIG.epoch)||0;
+let syncOn=false;
+
+function expectedTime(){const d=video.duration;if(!d||!isFinite(d))return null;
+  const t=((Date.now()-EPOCH)/1000)%d;return t<0?t+d:t;}
+function tryPlay(){video.play().then(()=>{$('start').hidden=true;}).catch(()=>{$('start').hidden=false;});}
+$('start').onclick=()=>{if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}tryPlay();};
+
+function attachVideo(src,remote){
+  syncOn=false;video.src=src;video.load();
+  video.onloadedmetadata=()=>{
+    const r=video.videoWidth/video.videoHeight;
+    if(Math.abs(r-2)>.05)toast('縦横比が2:1ではありません（'+video.videoWidth+'×'+video.videoHeight+'）。360°動画として書き出し直してください');
+    else if(video.videoWidth>4096)toast('4Kを超える動画はiPhoneで表示できないことがあります');
+    syncOn=remote&&CONFIG.sync;
+    if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}
+    tryPlay();
+  };
+  video.onloadeddata=()=>{
+    if(videoTex)videoTex.dispose();
+    videoTex=new THREE.VideoTexture(video);videoTex.encoding=THREE.sRGBEncoding;
+    videoTex.minFilter=THREE.LinearFilter;videoTex.generateMipmaps=false;
+    mat.map=videoTex;mat.needsUpdate=true;usingSample=false;$('srcLabel').hidden=true;
+  };
+  video.onerror=()=>{if(remote)toast(CONFIG.video+' を読み込めませんでした。サンプル映像を表示しています');else toast('この動画は再生できませんでした');};
+}
+
+/* 全員の再生位置を現在時刻に合わせる（後から開いた人も同じ瞬間を見る） */
+setInterval(()=>{
+  if(!syncOn||video.paused||video.seeking)return;
+  const e=expectedTime();if(e==null)return;const d=video.duration;
+  let diff=e-video.currentTime;if(diff>d/2)diff-=d;if(diff<-d/2)diff+=d;
+  if(Math.abs(diff)>1){video.currentTime=e;video.playbackRate=1;}
+  else if(Math.abs(diff)>.08){video.playbackRate=1+Math.max(-.05,Math.min(.05,diff*.5));}
+  else video.playbackRate=1;
+},1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;tryPlay();}});
+
+if(Array.isArray(CONFIG.videos)&&CONFIG.videos.length){
+  if(!qp.get('v'))CONFIG.video=CONFIG.videos[0].file;
+  $('clipBox').hidden=false;
+  CONFIG.videos.forEach(c=>{const b=document.createElement('button');b.textContent=c.label||c.file;
+    b.onclick=()=>{CONFIG.video=c.file;attachVideo(c.file,true);toast(b.textContent+' に切り替えました');closeSheet();};
+    $('clipList').appendChild(b);});
+}
+if(CONFIG.video)attachVideo(CONFIG.video,true);
+
+$('file').addEventListener('change',e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f)return;
+  if(objUrl)URL.revokeObjectURL(objUrl);
+  objUrl=URL.createObjectURL(f);attachVideo(objUrl,false);
+  toast('手元の動画を再生します（時刻同期はオフ）');closeSheet();
+});
+$('sound').onclick=()=>{video.muted=!video.muted;$('sound').textContent='音声：'+(video.muted?'オフ':'オン');if(!video.muted)video.play().catch(()=>{});};
+$('playPause').onclick=()=>{if(video.paused){if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}video.play().catch(()=>{});$('playPause').textContent='一時停止';}else{video.pause();$('playPause').textContent='再生';}};
+
+/* ---------- 視点の状態 ---------- */
+const st={lon:180,lat:0,tLon:180,tLat:0,fov:70,tFov:70,vLon:0,vLat:0,front:180};
+const cfg={lag:.55,tiltMin:-45,tiltMax:45,inertia:true};
+const clampLat=v=>Math.max(cfg.tiltMin,Math.min(cfg.tiltMax,v));
+
+const pointers=new Map();let pinchStart=0,fovStart=70,lastMove=0;
+stage.addEventListener('pointerdown',e=>{
+  stage.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  st.vLon=st.vLat=0;
+  if(usingSample===false&&video.paused&&$('playPause').textContent==='一時停止')video.play().catch(()=>{});
+  if(pointers.size===2){const [a,b]=[...pointers.values()];pinchStart=Math.hypot(a.x-b.x,a.y-b.y);fovStart=st.tFov;}
+});
+stage.addEventListener('pointermove',e=>{
+  const p=pointers.get(e.pointerId);if(!p)return;
+  if(pointers.size===1){
+    const k=st.fov/stage.clientHeight;
+    const dLon=-(e.clientX-p.x)*k, dLat=(e.clientY-p.y)*k;
+    st.tLon+=dLon;st.tLat=clampLat(st.tLat+dLat);
+    const now=performance.now(),dt=Math.max(1,now-lastMove);lastMove=now;
+    st.vLon=dLon/dt*16;st.vLat=dLat/dt*16;
+  }
+  p.x=e.clientX;p.y=e.clientY;
+  if(pointers.size===2){const [a,b]=[...pointers.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);
+    if(pinchStart>0)st.tFov=Math.max(30,Math.min(95,fovStart*pinchStart/d));}
+});
+const up=e=>{pointers.delete(e.pointerId);if(pointers.size<2)pinchStart=0;
+  if(!cfg.inertia||performance.now()-lastMove>80){st.vLon=st.vLat=0;}};
+stage.addEventListener('pointerup',up);stage.addEventListener('pointercancel',up);
+stage.addEventListener('wheel',e=>{e.preventDefault();st.tFov=Math.max(30,Math.min(95,st.tFov+e.deltaY*.03));},{passive:false});
+
+/* ジョイスティック */
+const joy=$('joy'),knob=$('knob');let jx=0,jy=0,jid=null;
+function joyMove(e){const r=joy.getBoundingClientRect();let x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2;
+  const m=r.width/2-14,d=Math.hypot(x,y);if(d>m){x*=m/d;y*=m/d;}
+  knob.style.transform=`translate(${x}px,${y}px)`;jx=x/m;jy=y/m;}
+joy.addEventListener('pointerdown',e=>{e.stopPropagation();jid=e.pointerId;joy.setPointerCapture(jid);joy.classList.add('active');st.vLon=st.vLat=0;joyMove(e);});
+joy.addEventListener('pointermove',e=>{if(e.pointerId===jid)joyMove(e);});
+const joyEnd=e=>{if(e.pointerId!==jid)return;jid=null;jx=jy=0;knob.style.transform='';joy.classList.remove('active');};
+joy.addEventListener('pointerup',joyEnd);joy.addEventListener('pointercancel',joyEnd);
+
+/* ---------- 設定 ---------- */
+const sheet=$('sheet');
+function closeSheet(){sheet.classList.remove('open');}
+$('gear').onclick=()=>sheet.classList.toggle('open');
+$('closeSheet').onclick=closeSheet;
+$('lag').oninput=e=>cfg.lag=e.target.value/100;
+$('tiltMin').oninput=e=>{cfg.tiltMin=+e.target.value;st.tLat=clampLat(st.tLat);};
+$('tiltMax').oninput=e=>{cfg.tiltMax=+e.target.value;st.tLat=clampLat(st.tLat);};
+$('inertia').onchange=e=>cfg.inertia=e.target.checked;
+$('joyOn').onchange=e=>joy.hidden=!e.target.checked;
+$('liveOn').onchange=e=>$('liveBadge').hidden=!e.target.checked;
+$('hudOn').onchange=e=>document.body.classList.toggle('hidden-ui',!e.target.checked);
+$('camInput').oninput=e=>$('camName').textContent=e.target.value;
+$('setFront').onclick=()=>{st.front=((st.tLon%360)+360)%360;toast('今の向きを正面（PAN 0°）にしました');};
+$('resetView').onclick=()=>{st.tLon=st.front+Math.round((st.tLon-st.front)/360)*360;st.tLat=0;st.tFov=70;st.vLon=st.vLat=0;closeSheet();};
+
+let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2400);}
+
+/* ---------- コンパス ---------- */
+const strip=$('compassStrip');const PX=2.2;
+(function(){let h='';for(let a=-540;a<=540;a+=15){const n=((a%360)+360)%360;
+  const lab=n===0?'正面':n===90?'右':n===180?'後':n===270?'左':(n%45===0?String(n>180?n-360:n):'·');
+  h+=`<span class="${n%90===0?'major':''}" style="left:${(a+540)*PX}px">${lab}</span>`;}strip.innerHTML=h;})();
+
+/* ---------- ループ ---------- */
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+window.addEventListener('resize',resize);resize();
+const fmt=(v,w,d)=>(v>=0?'+':'-')+Math.abs(v).toFixed(d).padStart(w,'0');
+const target=new THREE.Vector3();let prev=performance.now(),sampleT=0;
+function frame(now){
+  const dt=Math.min(.05,(now-prev)/1000);prev=now;
+  if(jx||jy){const rate=70*(st.fov/70);st.tLon+=jx*Math.abs(jx)*rate*dt;st.tLat=clampLat(st.tLat-jy*Math.abs(jy)*rate*dt);}
+  if(pointers.size===0&&(st.vLon||st.vLat)){st.tLon+=st.vLon;st.tLat=clampLat(st.tLat+st.vLat);st.vLon*=.93;st.vLat*=.93;
+    if(Math.abs(st.vLon)<.005&&Math.abs(st.vLat)<.005)st.vLon=st.vLat=0;}
+  const k=1-Math.pow(1-(0.45-cfg.lag*.4),dt*60);
+  st.lon+=(st.tLon-st.lon)*k;st.lat+=(st.tLat-st.lat)*k;st.fov+=(st.tFov-st.fov)*k;
+  camera.fov=st.fov;camera.updateProjectionMatrix();
+  const phi=THREE.MathUtils.degToRad(90-st.lat),th=THREE.MathUtils.degToRad(st.lon);
+  target.set(500*Math.sin(phi)*Math.cos(th),500*Math.cos(phi),500*Math.sin(phi)*Math.sin(th));
+  camera.lookAt(target);
+  if(usingSample){sampleT+=dt;drawSample(sampleT);sampleTex.needsUpdate=true;}
+  renderer.render(scene,camera);
+  let pan=((st.lon-st.front)%360+540)%360-180;
+  $('pan').textContent=fmt(pan,5,1)+'°';$('tilt').textContent=fmt(st.lat,4,1)+'°';$('zoom').textContent=(70/st.fov).toFixed(1)+'x';
+  strip.style.transform=`translateX(${-(pan+540)*PX+strip.parentElement.clientWidth/2}px)`;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+function tick(){const d=new Date(),p=n=>String(n).padStart(2,'0');
+  $('clock').textContent=`${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  $('date').textContent=`${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())}`;}
+tick();setInterval(tick,1000);
+})();
+</script>
+</body>
+</html>
