@@ -2,8 +2,8 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>360 リモートカメラ</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Heater CAM</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;700&display=swap">
@@ -48,6 +48,10 @@ button:focus-visible,.filebtn:focus-within,input:focus-visible{outline:2px solid
 #gear{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));width:42px;height:42px;padding:0;display:grid;place-items:center;border-radius:50%}
 #gear svg{width:20px;height:20px}
 /* ジョイスティック */
+#frame{position:fixed;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;z-index:1}
+.hud,#compass,#reticle,#gear,#joy,#zoomBtns{z-index:2}
+#zoomBtns{position:fixed;right:calc(max(16px,env(safe-area-inset-right,0px)) + 8px);bottom:calc(152px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px}
+#zoomBtns button{width:44px;height:44px;padding:0;border-radius:50%;font-size:22px;line-height:1;touch-action:manipulation}
 #joy{position:fixed;right:calc(max(16px,env(safe-area-inset-right,0px)) + 8px);bottom:calc(24px + env(safe-area-inset-bottom,0px));width:116px;height:116px;border-radius:50%;border:1px solid var(--line);background:rgba(12,16,19,.45);touch-action:none}
 #joy::before{content:"";position:absolute;inset:50% auto auto 50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--line)}
 #knob{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px;border-radius:50%;background:rgba(232,238,240,.18);border:1px solid rgba(232,238,240,.5);transition:transform .15s}
@@ -78,6 +82,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 </style>
 
 <div id="stage" aria-label="360度映像。ドラッグで向きを変え、ピンチでズームします"></div>
+<img id="frame" alt="" hidden>
 <div id="reticle"></div>
 <div id="compass"><div id="compassStrip"></div></div>
 
@@ -100,6 +105,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>
 </button>
 
+<div id="zoomBtns"><button id="zin" aria-label="ズームイン">＋</button><button id="zout" aria-label="ズームアウト">－</button></div>
 <div id="joy" aria-label="カメラの向きを操作するジョイスティック"><div id="knob"></div></div>
 <div id="toast" role="status"></div>
 <button id="start" hidden>タップして視聴を開始</button>
@@ -125,7 +131,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
     <div class="row"><div>LIVE表示</div><input type="checkbox" class="switch" id="liveOn" checked></div>
     <div class="row"><div>画面の文字表示（HUD）</div><input type="checkbox" class="switch" id="hudOn" checked></div>
     <div class="row"><div>カメラ名</div><input type="text" id="camInput" value="CAM-01 ・ 360°" style="width:46%;font:inherit;color:var(--fg);background:#1a2125;border:1px solid var(--line);border-radius:6px;padding:6px 8px"></div>
-    <p class="note">公開URLで開くと、全員の再生位置が現在時刻に合わせて同期されます（一時停止しても再開時に今の位置へ戻ります）。<br>操作：1本指でスワイプして向きを変える／2本指でピンチしてズーム／ジョイスティックで首振り。</p>
+    <p class="note">公開URLで開くと、全員の再生位置が現在時刻に合わせて同期されます（一時停止しても再開時に今の位置へ戻ります）。<br>操作：1本指でスワイプして向きを変える／2本指でピンチ、または＋－ボタンでズーム／ジョイスティックで首振り。</p>
   </div>
 </section>
 
@@ -238,6 +244,18 @@ if(qp.get('v'))CONFIG.video=qp.get('v');
 if(qp.get('sync')==='0')CONFIG.sync=false;
 if(CONFIG.camName){$('camName').textContent=CONFIG.camName;$('camInput').value=CONFIG.camName;}
 const EPOCH=Date.parse(CONFIG.epoch)||0;
+/* フレーム画像（縦向き・横向きで差し替え） */
+const frameEl=$('frame');
+function applyFrame(){
+  const land=innerWidth>innerHeight;
+  const src=land?(CONFIG.frameLandscape||CONFIG.frame):(CONFIG.frame||CONFIG.frameLandscape);
+  if(!src){frameEl.hidden=true;return;}
+  if(frameEl.getAttribute('src')!==src)frameEl.src=src;
+  frameEl.hidden=false;
+}
+frameEl.onerror=()=>{frameEl.hidden=true;toast('フレーム画像（'+frameEl.getAttribute('src')+'）が見つかりません');};
+addEventListener('resize',applyFrame);applyFrame();
+if(CONFIG.hideHud)document.body.classList.add('hidden-ui');
 let syncOn=false;
 
 function expectedTime(){const d=video.duration;if(!d||!isFinite(d))return null;
@@ -298,30 +316,50 @@ const st={lon:180,lat:0,tLon:180,tLat:0,fov:70,tFov:70,vLon:0,vLat:0,front:180};
 const cfg={lag:.55,tiltMin:-45,tiltMax:45,inertia:true};
 const clampLat=v=>Math.max(cfg.tiltMin,Math.min(cfg.tiltMax,v));
 
+const FOV_MIN=20,FOV_MAX=100;const clampFov=v=>Math.max(FOV_MIN,Math.min(FOV_MAX,v));
 const pointers=new Map();let pinchStart=0,fovStart=70,lastMove=0;
-stage.addEventListener('pointerdown',e=>{
-  stage.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  st.vLon=st.vLat=0;
-  if(usingSample===false&&video.paused&&$('playPause').textContent==='一時停止')video.play().catch(()=>{});
-  if(pointers.size===2){const [a,b]=[...pointers.values()];pinchStart=Math.hypot(a.x-b.x,a.y-b.y);fovStart=st.tFov;}
-});
-stage.addEventListener('pointermove',e=>{
-  const p=pointers.get(e.pointerId);if(!p)return;
-  if(pointers.size===1){
-    const k=st.fov/stage.clientHeight;
-    const dLon=-(e.clientX-p.x)*k, dLat=(e.clientY-p.y)*k;
-    st.tLon+=dLon;st.tLat=clampLat(st.tLat+dLat);
-    const now=performance.now(),dt=Math.max(1,now-lastMove);lastMove=now;
-    st.vLon=dLon/dt*16;st.vLat=dLat/dt*16;
-  }
-  p.x=e.clientX;p.y=e.clientY;
-  if(pointers.size===2){const [a,b]=[...pointers.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);
-    if(pinchStart>0)st.tFov=Math.max(30,Math.min(95,fovStart*pinchStart/d));}
-});
-const up=e=>{pointers.delete(e.pointerId);if(pointers.size<2)pinchStart=0;
+function dragBy(dx,dy){
+  const k=st.fov/stage.clientHeight;const dLon=-dx*k,dLat=dy*k;
+  st.tLon+=dLon;st.tLat=clampLat(st.tLat+dLat);
+  const now=performance.now(),dt=Math.max(1,now-lastMove);lastMove=now;
+  st.vLon=dLon/dt*16;st.vLat=dLat/dt*16;
+}
+function resumeIfNeeded(){if(usingSample===false&&video.paused&&$('playPause').textContent==='一時停止')tryPlay();}
+/* タッチ（スマホ）：1本指で向き、2本指でズーム */
+let tLast=null;
+const tdist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+stage.addEventListener('touchstart',e=>{e.preventDefault();st.vLon=st.vLat=0;resumeIfNeeded();
+  if(e.touches.length>=2){pinchStart=tdist(e.touches);fovStart=st.tFov;tLast=null;}
+  else{tLast={x:e.touches[0].clientX,y:e.touches[0].clientY};}
+},{passive:false});
+stage.addEventListener('touchmove',e=>{e.preventDefault();
+  if(e.touches.length>=2&&pinchStart>0){st.tFov=clampFov(fovStart*pinchStart/tdist(e.touches));st.vLon=st.vLat=0;}
+  else if(e.touches.length===1&&tLast){const t=e.touches[0];dragBy(t.clientX-tLast.x,t.clientY-tLast.y);tLast={x:t.clientX,y:t.clientY};}
+},{passive:false});
+stage.addEventListener('touchend',e=>{e.preventDefault();
+  if(e.touches.length<2)pinchStart=0;
+  if(e.touches.length===1){tLast={x:e.touches[0].clientX,y:e.touches[0].clientY};st.vLon=st.vLat=0;}
+  else if(e.touches.length===0){tLast=null;if(!cfg.inertia||performance.now()-lastMove>80)st.vLon=st.vLat=0;}
+},{passive:false});
+stage.addEventListener('touchcancel',()=>{tLast=null;pinchStart=0;st.vLon=st.vLat=0;});
+/* iPhoneのページ拡大を止める */
+['gesturestart','gesturechange','gestureend'].forEach(n=>document.addEventListener(n,e=>e.preventDefault(),{passive:false}));
+/* マウス（PC） */
+stage.addEventListener('pointerdown',e=>{if(e.pointerType==='touch')return;
+  stage.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});st.vLon=st.vLat=0;resumeIfNeeded();});
+stage.addEventListener('pointermove',e=>{if(e.pointerType==='touch')return;const p=pointers.get(e.pointerId);if(!p)return;
+  dragBy(e.clientX-p.x,e.clientY-p.y);p.x=e.clientX;p.y=e.clientY;});
+const up=e=>{if(e.pointerType==='touch')return;pointers.delete(e.pointerId);
   if(!cfg.inertia||performance.now()-lastMove>80){st.vLon=st.vLat=0;}};
 stage.addEventListener('pointerup',up);stage.addEventListener('pointercancel',up);
-stage.addEventListener('wheel',e=>{e.preventDefault();st.tFov=Math.max(30,Math.min(95,st.tFov+e.deltaY*.03));},{passive:false});
+/* ズームボタン（押している間ズーム） */
+let zoomDir=0;
+[['zin',-1],['zout',1]].forEach(([id,d])=>{const b=$(id);
+  b.addEventListener('pointerdown',e=>{e.preventDefault();zoomDir=d;});
+  ['pointerup','pointerleave','pointercancel'].forEach(n=>b.addEventListener(n,()=>{zoomDir=0;}));
+  b.addEventListener('click',()=>{st.tFov=clampFov(st.tFov+d*6);});
+});
+stage.addEventListener('wheel',e=>{e.preventDefault();st.tFov=clampFov(st.tFov+e.deltaY*.03);},{passive:false});
 
 /* ジョイスティック */
 const joy=$('joy'),knob=$('knob');let jx=0,jy=0,jid=null;
@@ -365,7 +403,8 @@ const target=new THREE.Vector3();let prev=performance.now(),sampleT=0;
 function frame(now){
   const dt=Math.min(.05,(now-prev)/1000);prev=now;
   if(jx||jy){const rate=70*(st.fov/70);st.tLon+=jx*Math.abs(jx)*rate*dt;st.tLat=clampLat(st.tLat-jy*Math.abs(jy)*rate*dt);}
-  if(pointers.size===0&&(st.vLon||st.vLat)){st.tLon+=st.vLon;st.tLat=clampLat(st.tLat+st.vLat);st.vLon*=.93;st.vLat*=.93;
+  if(zoomDir)st.tFov=clampFov(st.tFov+zoomDir*45*dt);
+  if(pointers.size===0&&!tLast&&(st.vLon||st.vLat)){st.tLon+=st.vLon;st.tLat=clampLat(st.tLat+st.vLat);st.vLon*=.93;st.vLat*=.93;
     if(Math.abs(st.vLon)<.005&&Math.abs(st.vLat)<.005)st.vLon=st.vLat=0;}
   const k=1-Math.pow(1-(0.45-cfg.lag*.4),dt*60);
   st.lon+=(st.tLon-st.lon)*k;st.lat+=(st.tLat-st.lat)*k;st.fov+=(st.tFov-st.fov)*k;
