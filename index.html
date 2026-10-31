@@ -48,6 +48,8 @@ button:focus-visible,.filebtn:focus-within,input:focus-visible{outline:2px solid
 #gear{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));width:42px;height:42px;padding:0;display:grid;place-items:center;border-radius:50%}
 #gear svg{width:20px;height:20px}
 /* ジョイスティック */
+#connecting{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--mono);font-size:13px;letter-spacing:.1em;color:var(--dim);pointer-events:none;z-index:2;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
 #frame{position:fixed;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;z-index:1}
 .hud,#compass,#reticle,#gear,#joy,#zoomBtns{z-index:2}
 #zoomBtns{position:fixed;right:calc(max(16px,env(safe-area-inset-right,0px)) + 8px);bottom:calc(152px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px}
@@ -89,7 +91,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 <div class="hud tl">
   <span class="live" id="liveBadge"><i></i>LIVE</span>
   <span id="camName">CAM-01 ・ 360°</span>
-  <span class="sample" id="srcLabel">サンプル映像</span>
+  <span class="sample" id="srcLabel" hidden>サンプル映像</span>
 </div>
 <div class="hud tr">
   <span id="clock" class="val">--:--:--</span>
@@ -108,6 +110,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 <div id="zoomBtns"><button id="zin" aria-label="ズームイン">＋</button><button id="zout" aria-label="ズームアウト">－</button></div>
 <div id="joy" aria-label="カメラの向きを操作するジョイスティック"><div id="knob"></div></div>
 <div id="toast" role="status"></div>
+<div id="connecting">映像に接続中…</div>
 <button id="start" hidden>タップして視聴を開始</button>
 
 <section id="sheet" aria-label="設定">
@@ -230,8 +233,9 @@ function drawSample(t){
   lctx.fillStyle='#fff';lctx.beginPath();lctx.ellipse(b[0],b[1],r*1.3,r,0,0,7);lctx.fill();
 }
 const sampleTex=new THREE.CanvasTexture(live);sampleTex.encoding=THREE.sRGBEncoding;
-mat.map=sampleTex;
-let usingSample=true;
+const REMOTE=!!((window.CAM360_CONFIG||{}).video||((window.CAM360_CONFIG||{}).videos||[]).length);
+let usingSample=!REMOTE;
+if(REMOTE){mat.map=null;mat.color.set(0x000000);}else{mat.map=sampleTex;$('connecting').hidden=true;$('srcLabel').hidden=false;}
 
 /* ---------- 動画 ---------- */
 const video=document.createElement('video');
@@ -277,9 +281,10 @@ function attachVideo(src,remote){
     if(videoTex)videoTex.dispose();
     videoTex=new THREE.VideoTexture(video);videoTex.encoding=THREE.sRGBEncoding;
     videoTex.minFilter=THREE.LinearFilter;videoTex.generateMipmaps=false;
-    mat.map=videoTex;mat.needsUpdate=true;usingSample=false;$('srcLabel').hidden=true;
+    mat.map=videoTex;mat.color.set(0xffffff);mat.needsUpdate=true;usingSample=false;$('srcLabel').hidden=true;$('connecting').hidden=true;
   };
-  video.onerror=()=>{if(remote)toast(CONFIG.video+' を読み込めませんでした。サンプル映像を表示しています');else toast('この動画は再生できませんでした');};
+  video.onerror=()=>{$('connecting').hidden=true;if(remote&&!videoTex){mat.map=sampleTex;mat.color.set(0xffffff);mat.needsUpdate=true;usingSample=true;$('srcLabel').hidden=false;}
+  if(remote)toast(CONFIG.video+' を読み込めませんでした');else toast('この動画は再生できませんでした');};
 }
 
 /* 全員の再生位置を現在時刻に合わせる（後から開いた人も同じ瞬間を見る） */
