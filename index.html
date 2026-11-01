@@ -358,7 +358,7 @@ function hideSplash(){videoReady=true;maybeCloseSplash();}
 runSplash();
 /* ---------- 4方向切り替え（低画質の全周を土台に、見ている方向の高画質180°を重ねる） ---------- */
 let multi=null,hqMesh=null,hqMat=null;
-const MULTI_NAMES={180:'正面',270:'右',0:'後ろ',90:'左'};
+const MULTI_NAMES={180:'正面',225:'右前',270:'右',315:'右後ろ',0:'後ろ',45:'左後ろ',90:'左',135:'左前'};
 function angDist(a,b){let d=((a-b)%360+540)%360-180;return Math.abs(d);}
 function edgeAlphaTex(){const c=document.createElement('canvas');c.width=256;c.height=128;const x=c.getContext('2d');
   const gh=x.createLinearGradient(0,0,256,0);gh.addColorStop(0,'#000');gh.addColorStop(.06,'#fff');gh.addColorStop(.94,'#fff');gh.addColorStop(1,'#000');
@@ -412,7 +412,7 @@ function multiTick(now){
   let best=multi.cfg.tiles[0];multi.cfg.tiles.forEach(t=>{if(angDist(L,t.lon)<angDist(L,best.lon))best=t;});
   const curLon=multi.cur>=0?multi.slots[multi.cur].lon:null;
   if(curLon===null){if(multi.pending===null&&video.readyState>=2)requestTile(best);}
-  else if(best.lon!==curLon&&angDist(L,curLon)>50)requestTile(best);   // 余裕をもって切り替える
+  else if(best.lon!==curLon&&angDist(L,curLon)>360/multi.cfg.tiles.length/2+5)requestTile(best);   // 隣の方向の中間を少し越えたら切り替える
   // 高画質版を土台の再生位置に合わせる
   if(multi.cur>=0&&now-multi.lastSync>500){multi.lastSync=now;const v=multi.slots[multi.cur].v;
     if(video.paused&&!v.paused)v.pause();else if(!video.paused&&v.paused)v.play().catch(()=>{});
