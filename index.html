@@ -497,6 +497,14 @@ video.addEventListener('loadedmetadata',()=>{buildChapters();if(isLong()){video.
 video.addEventListener('seeking',()=>{   // 再生位置を飛ばしたら、高画質はいったん外して、着いた位置で待ち合わせし直す
   if(!multi)return;multi.slots.forEach(slotStop);multi.cur=-1;multi.pending=null;multi.fade=null;
   $('hqBadge').textContent='高画質エリア：読み込み中';});   // 画面の描きかえとは別に、待ち合わせを細かく確認
+function bufAhead(v){const b=v.buffered,t=v.currentTime||0;for(let i=0;i<b.length;i++){if(b.start(i)<=t+0.05&&b.end(i)>t)return b.end(i)-t;}return 0;}
+function canHQ(){   // 高画質の1区切り(1秒分)を、1秒以内に余裕をもって取れる回線か（最初の応答の遅さも含めて判定）
+  if(!window.__bw)return true;const seg=(multi&&multi.slots.find(x=>x.segBytes)||{}).segBytes||1.6e6;
+  return (window.__rtt||0)+seg/window.__bw<0.85;}
+function bwText(){return window.__bw?'（回線'+(window.__bw*8/1e6).toFixed(0)+'Mbps・応答'+((window.__rtt||0)*1000).toFixed(0)+'ms）':'';}
+function dropHQ(now){if(!multi)return;multi.slots.forEach(slotStop);multi.cur=-1;multi.pending=null;multi.fade=null;
+  multi.coolMs=Math.min(60000,(multi.coolMs||2500)*2);multi.coolUntil=now+multi.coolMs;
+  $('hqBadge').textContent='高画質エリア：回線待ち（標準画質で再生中）'+bwText();}
 function multiTick(now){
   if(!multi||!multi.cfg.tiles||!multi.cfg.tiles.length)return;
   const L=((st.lon%360)+360)%360;
@@ -516,14 +524,25 @@ function multiTick(now){
   // 準備中の方向がもう狙いと違えば取りやめ
   if(multi.pending!==null&&multi.pending!==target.lon&&(touching||!slow)&&!multi.fade){
     const pi=multi.slots.findIndex(x=>x.lon===multi.pending);if(pi>=0&&pi!==multi.cur)slotStop(multi.slots[pi]);multi.pending=null;}
-  if(multi.pending===null&&!multi.fade&&(settled||coasting||curLon===null)){
+  const baseAhead=bufAhead(video);
+  // 土台（全周）を最優先：土台の残りが少ないときは高画質の準備を取りやめる
+  if(multi.pending!==null&&baseAhead<2&&!video.paused&&!multi.fade){const pi=multi.slots.findIndex(x=>x.lon===multi.pending);if(pi>=0&&pi!==multi.cur)slotStop(multi.slots[pi]);multi.pending=null;}
+  if(multi.pending===null&&!multi.fade&&(settled||coasting||curLon===null)&&now>=(multi.coolUntil||0)){
     const need=curLon===null||(target.lon!==curLon&&angDist(settled?L:settleLon,curLon)>360/multi.cfg.tiles.length/2+5);
-    if(need&&video.readyState>=2){multi.reqAt=now;requestTile(target);}
+    if(need&&video.readyState>=2){
+      if(!canHQ()||baseAhead<3){if(curLon===null)$('hqBadge').textContent='高画質エリア：回線が遅いため標準画質で再生中'+bwText();multi.coolUntil=now+3000;}
+      else{multi.reqAt=now;requestTile(target);}
+    }
   }
   multi.slots.forEach(s=>slotArmCheck(s,now));
   if(now-multi.lastSync>150){multi.lastSync=now;
     multi.slots.forEach((s,i)=>{if(s.lon===null)return;if(!s.started)return;const d=syncTo(s.v,now,s);
       // 大きくずれたまま／止まったまま（映像の先頭に戻った時など）なら、土台の位置から読み直す
+      // 高画質が回線に追いつけない（途中で止まる）、または土台の残りが減ってきたら、高画質を外して標準画質でなめらかに再生を続ける
+      if(i===multi.cur&&!video.paused){const ta=bufAhead(s.v);
+        if(ta<0.15&&!s.v.ended)s.starve=(s.starve||0)+150;else s.starve=0;
+        if(s.starve>600||baseAhead<1.5){dropHQ(now);return;}
+        if(now-(s.loadedAt||0)>20000)multi.coolMs=5000;}
       if(d>0.3||s.v.ended){s.bad=(s.bad||0)+150;}else s.bad=0;
       if((s.v.ended&&now-(s.loadedAt||0)>1000)||(s.bad>3000&&now-(s.loadedAt||0)>6000)){slotLoad(s);}
       if(i!==multi.cur&&multi.pending===s.lon&&s.ready&&d<=SYNC_TOL)activateTile(i);});}
@@ -561,7 +580,7 @@ function attachVideo(src,remote,entry){
   if(hls){hls.destroy();hls=null;}
   const useHls=entry&&entry.hls&&window.Hls&&Hls.isSupported();
   if(useHls){
-    hls=new Hls({maxBufferLength:10,maxMaxBufferLength:30,capLevelToPlayerSize:false,startLevel:-1,startFragPrefetch:true});
+    hls=new Hls({maxBufferLength:30,maxMaxBufferLength:60,capLevelToPlayerSize:false,startLevel:-1,startFragPrefetch:true});
     hls.on(Hls.Events.MANIFEST_PARSED,()=>pickLevel());hls.on(Hls.Events.FRAG_LOADED,(e,d)=>noteFrag(d));
     hls.on(Hls.Events.ERROR,(ev,d)=>{
       lastErr=(d.type||'')+'/'+(d.details||'')+(d.response&&d.response.code?'/'+d.response.code:'');
