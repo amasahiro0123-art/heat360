@@ -48,16 +48,44 @@ button:focus-visible,.filebtn:focus-within,input:focus-visible{outline:2px solid
 #gear{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));width:42px;height:42px;padding:0;display:grid;place-items:center;border-radius:50%}
 #gear svg{width:20px;height:20px}
 /* ジョイスティック */
-#connecting{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);font-family:Meiryo,"メイリオ","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;font-size:20px;font-weight:700;letter-spacing:.06em;white-space:nowrap;color:var(--fg);pointer-events:none;z-index:2;animation:pulse 1.4s ease-in-out infinite}
+@font-face{font-family:'Montserrat';font-weight:900;font-display:swap;src:url(fonts/montserrat-latin-900-normal.woff2) format('woff2')}
+@font-face{font-family:'Montserrat';font-weight:600;font-display:swap;src:url(fonts/montserrat-latin-600-normal.woff2) format('woff2')}
+#connecting{position:fixed;inset:0;display:grid;place-items:center;background:#000;z-index:5;pointer-events:none;transition:opacity 1s ease}
+#connecting.fade{opacity:0}
+.sp-in{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding-inline:16px}
+.sp-step{opacity:0;transition:opacity 1s ease}
+.sp-step.on{opacity:1}
+.sp-name{font-family:'Montserrat',Meiryo,"Hiragino Sans",sans-serif;font-weight:900;font-size:clamp(34px,10vw,60px);letter-spacing:.01em;color:#fff}
+.sp-swap{display:grid;place-items:center;min-height:0}
+.sp-swap>*{grid-area:1/1}
+.sp-copy{position:absolute;left:0;right:0;bottom:calc(48px + env(safe-area-inset-bottom,0px));text-align:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:clamp(14.4px,4.32vw,19.2px);letter-spacing:.22em;color:#e3262e;padding-left:.22em}
+/* PC・横長で高さが足りない画面：間隔とロゴを詰める */
+@media (min-aspect-ratio:1/1) and (max-height:820px){.sp-in{gap:10px;transform:translateY(-4vh)}.sp-wait{margin-top:12px}.sp-team{margin-top:24px;height:clamp(80px,17vh,140px)}.sp-copy{bottom:calc(30px + env(safe-area-inset-bottom,0px))}}
+.sp-sponsor{display:flex;flex-direction:column;align-items:center;gap:10px}
+.sp-by{font-family:'Montserrat',sans-serif;font-weight:600;font-size:12px;letter-spacing:.24em;color:#9aa4a8;text-transform:uppercase;padding-left:.24em}
+#spLogo{max-width:min(38.4vw,192px);max-height:64px;object-fit:contain}
+.sp-sname{font-family:Meiryo,"メイリオ","Hiragino Sans","Noto Sans JP",sans-serif;font-weight:700;font-size:20px;color:#fff}
+.sp-wait{margin-top:22px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:clamp(14.4px,4.32vw,19.2px);letter-spacing:.22em;padding-left:.22em;color:#9aa4a8}
+.sp-team{margin-top:60px;height:clamp(120px,33vw,180px);width:auto;object-fit:contain}
+.sp-wait.blink{animation:spBlink 2s ease-in-out infinite}
+@keyframes spBlink{0%,100%{opacity:0}50%{opacity:1}}
 @keyframes pulse{50%{opacity:.35}}
+#intro{position:fixed;left:50%;top:58%;transform:translate(-50%,-50%);padding:12px 18px;border-radius:12px;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;z-index:3;text-shadow:0 1px 6px rgba(0,0,0,.8);transition:opacity .8s;white-space:nowrap}
+#intro.fade{opacity:0}
+.in-hint{font-family:Meiryo,"メイリオ","Hiragino Sans","Noto Sans JP",sans-serif;font-size:12px;color:#fff;opacity:.85}
 #frame{position:fixed;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;z-index:1}
-.hud,#compass,#reticle,#gear,#joy,#zoomBtns{z-index:2}
-#zoomBtns{position:fixed;right:calc(max(16px,env(safe-area-inset-right,0px)) + 8px);bottom:calc(152px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px}
-#zoomBtns button{width:44px;height:44px;padding:0;border-radius:50%;font-size:22px;line-height:1;touch-action:manipulation}
-#joy{position:fixed;right:calc(max(16px,env(safe-area-inset-right,0px)) + 8px);bottom:calc(24px + env(safe-area-inset-bottom,0px));width:116px;height:116px;border-radius:50%;border:1px solid var(--line);background:rgba(12,16,19,.45);touch-action:none}
-#joy::before{content:"";position:absolute;inset:50% auto auto 50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--line)}
-#knob{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px;border-radius:50%;background:rgba(232,238,240,.18);border:1px solid rgba(232,238,240,.5);transition:transform .15s}
-#joy.active #knob{transition:none;background:rgba(89,214,196,.35);border-color:var(--accent)}
+.hud,#compass,#reticle,#gear,#joy,#zoomBtns,#joyLabel{z-index:2}
+#zoomBtns{position:fixed;right:calc(max(16px,env(safe-area-inset-right,0px)) + 8px);bottom:calc(29px + env(safe-area-inset-bottom,0px));box-sizing:border-box;width:54px;display:flex;flex-direction:column;align-items:center;padding:4px;border-radius:28px;background:rgba(0,0,0,.5);border:1.5px solid rgba(255,255,255,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#zoomBtns button{width:44px;height:44px;padding:0;border:0;border-radius:50%;background:transparent;color:#fff;font-size:26px;font-weight:300;line-height:1;touch-action:manipulation}
+#zoomBtns button:active{background:rgba(255,255,255,.18)}
+#zoomLabel{position:fixed;right:calc(max(16px,env(safe-area-inset-right,0px)) + 8px);width:54px;bottom:calc(152px + env(safe-area-inset-bottom,0px));text-align:center;font-family:"Hiragino Sans","Noto Sans JP",Meiryo,sans-serif;font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);pointer-events:none;z-index:2;white-space:nowrap}
+#zoomBtns .zl{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:9px;letter-spacing:.12em;color:rgba(255,255,255,.75);padding:2px 0}
+#joy{position:fixed;right:calc(max(16px,env(safe-area-inset-right,0px)) + 74px);bottom:calc(24px + env(safe-area-inset-bottom,0px));width:124px;height:124px;border-radius:50%;border:1.5px solid rgba(255,255,255,.55);background:radial-gradient(circle,rgba(0,0,0,.35) 0%,rgba(0,0,0,.55) 100%);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:none}
+#joy .arrows{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;fill:rgba(255,255,255,.85)}
+#joyLabel{position:fixed;right:calc(max(16px,env(safe-area-inset-right,0px)) + 74px);width:124px;bottom:calc(152px + env(safe-area-inset-bottom,0px));text-align:center;font-family:"Hiragino Sans","Noto Sans JP",Meiryo,sans-serif;font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);pointer-events:none;z-index:2}
+#knob{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px;border-radius:50%;background:rgba(255,255,255,.92);box-shadow:0 2px 8px rgba(0,0,0,.5);display:grid;place-items:center;transition:transform .15s}
+#knob svg{width:24px;height:24px;fill:none;stroke:#111;stroke-width:1.8}
+#joy.active #knob{transition:none;background:#fff;box-shadow:0 0 0 4px rgba(227,38,46,.6),0 2px 8px rgba(0,0,0,.5)}
 /* 設定シート */
 #sheet{position:fixed;left:0;right:0;bottom:0;max-height:78%;overflow-y:auto;background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px calc(20px + env(safe-area-inset-bottom,0px));transform:translateY(105%);transition:transform .28s ease;z-index:20}
 #sheet.open{transform:none}
@@ -106,10 +134,26 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>
 </button>
 
-<div id="zoomBtns"><button id="zin" aria-label="ズームイン">＋</button><button id="zout" aria-label="ズームアウト">－</button></div>
-<div id="joy" aria-label="カメラの向きを操作するジョイスティック"><div id="knob"></div></div>
+<div id="zoomLabel">ズーム</div>
+<div id="zoomBtns"><button id="zin" aria-label="ズームイン">＋</button><span class="zl">ZOOM</span><button id="zout" aria-label="ズームアウト">－</button></div>
+<div id="joyLabel">カメラの向き</div>
+<div id="joy" aria-label="カメラの向きを操作するジョイスティック"><svg class="arrows" viewBox="0 0 124 124" aria-hidden="true"><path d="M62 9l8 9H54z"/><path d="M62 115l8-9H54z"/><path d="M9 62l9-8v16z"/><path d="M115 62l-9-8v16z"/></svg><div id="knob"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 10.5l5-3v9l-5-3z"/></svg></div></div>
 <div id="toast" role="status"></div>
-<div id="connecting">Heater CAMに接続中…</div>
+<div id="connecting"><div class="sp-in">
+  <div class="sp-name sp-step" id="spName">Heater CAM</div>
+  <div class="sp-swap">
+    <div class="sp-sponsor sp-step" id="spSponsor">
+      <div class="sp-by">presented by</div>
+      <img id="spLogo" alt="" hidden>
+      <div class="sp-sname" id="spSName" hidden></div>
+    </div>
+  </div>
+  <div class="sp-wait sp-step" id="spWait">CONNECTING…</div>
+  <img class="sp-team sp-step" id="spTeam" alt="" hidden>
+</div>
+<div class="sp-copy sp-step" id="spCopy">YOUR VIEW, YOUR CAMERA</div>
+</div>
+<div id="intro" hidden><div class="in-hint">スワイプで見たい方向へ</div></div>
 <button id="start" hidden>タップして視聴を開始</button>
 
 <section id="sheet" aria-label="設定">
@@ -123,6 +167,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
       <button id="resetView">正面に戻す</button>
       <button id="sound">音声：オフ</button>
       <button id="playPause">一時停止</button>
+      <button id="qualityBtn" disabled>画質：標準 4K</button>
     </div>
     <hr>
     <div class="row"><div>操作の重さ<small>重いほどカメラが首を振るように遅れて動く</small></div><input type="range" id="lag" min="0" max="100" value="55"></div>
@@ -137,7 +182,9 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
   </div>
 </section>
 
+<script src="videos.js"></script>
 <script src="config.js"></script>
+<script src="hls.min.js"></script>
 <script src="three.min.js"></script>
 <script>
 (function(){
@@ -232,7 +279,7 @@ function drawSample(t){
   lctx.fillStyle='#fff';lctx.beginPath();lctx.ellipse(b[0],b[1],r*1.3,r,0,0,7);lctx.fill();
 }
 const sampleTex=new THREE.CanvasTexture(live);sampleTex.encoding=THREE.sRGBEncoding;
-const REMOTE=!!((window.CAM360_CONFIG||{}).video||((window.CAM360_CONFIG||{}).videos||[]).length);
+const REMOTE=!!((window.CAM360_CONFIG||{}).video||((window.CAM360_CONFIG||{}).videos||[]).length||(window.CAM360_VIDEOS||[]).length);
 let usingSample=!REMOTE;
 if(REMOTE){mat.map=null;mat.color.set(0x000000);}else{mat.map=sampleTex;$('connecting').hidden=true;$('srcLabel').hidden=false;}
 
@@ -250,8 +297,10 @@ const EPOCH=Date.parse(CONFIG.epoch)||0;
 /* フレーム画像（縦向き・横向きで差し替え） */
 const frameEl=$('frame');
 function applyFrame(){
-  const land=innerWidth>innerHeight;
-  const src=land?(CONFIG.frameLandscape||CONFIG.frame):(CONFIG.frame||CONFIG.frameLandscape);
+  const ar=innerWidth/innerHeight;let src;
+  if(ar<1)src=CONFIG.frame||CONFIG.frameLandscape||CONFIG.frameWide;          // スマホ縦
+  else if(ar<1.95)src=CONFIG.frameWide||CONFIG.frameLandscape||CONFIG.frame;  // PC・タブレット（16:9前後）
+  else src=CONFIG.frameLandscape||CONFIG.frameWide||CONFIG.frame;             // スマホ横
   if(!src){frameEl.hidden=true;return;}
   if(frameEl.getAttribute('src')!==src)frameEl.src=src;
   frameEl.hidden=false;
@@ -266,12 +315,75 @@ function expectedTime(){const d=video.duration;if(!d||!isFinite(d))return null;
 function tryPlay(){video.play().then(()=>{$('start').hidden=true;}).catch(()=>{$('start').hidden=false;});}
 $('start').onclick=()=>{if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}tryPlay();};
 
-function attachVideo(src,remote){
-  syncOn=false;video.src=src;video.load();
+/* ---------- 接続画面（キャッチコピー → スポンサー → 接続中） ---------- */
+let introShown=false,videoReady=false,splashSeqDone=false,splashClosing=false;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+if(CONFIG.teamLogo){const t=$('spTeam');t.src=CONFIG.teamLogo;t.hidden=false;t.onerror=()=>{t.hidden=true;};}
+const hasSponsor=!!(CONFIG.sponsorLogo||CONFIG.sponsorName);
+if(CONFIG.sponsorLogo){$('spLogo').src=CONFIG.sponsorLogo;$('spLogo').hidden=false;$('spLogo').onerror=()=>{$('spLogo').hidden=true;};}
+if(CONFIG.sponsorName){$('spSName').textContent=CONFIG.sponsorName;$('spSName').hidden=false;}
+async function runSplash(){
+  if($('connecting').hidden)return;
+  await wait(50);
+  $('spName').classList.add('on');$('spCopy').classList.add('on');$('spTeam').classList.add('on');   // ① 名前とキャッチコピーを1秒でフェードイン
+  await wait(1000);
+  if(hasSponsor){
+    $('spSponsor').classList.add('on');                               // ② presented by スポンサーを1秒でフェードイン
+    await wait(1000+1500);                                            //    スポンサーを見せる時間
+  }else{
+    await wait(1200);
+  }
+  splashSeqDone=true;                                                 // オープニング終了
+  if(!videoReady)$('spWait').classList.add('blink');                  // ③ まだつながっていなければ「接続中…」を点滅
+  maybeCloseSplash();                                                 // ④ つながっていれば1秒でフェードアウト
+}
+function maybeCloseSplash(){
+  if(!videoReady||!splashSeqDone||splashClosing)return;
+  splashClosing=true;const c=$('connecting');c.classList.add('fade');            // 1秒でフェードアウト
+  setTimeout(()=>{c.hidden=true;
+    if(!introShown){introShown=true;const i=$('intro');i.hidden=false;setTimeout(()=>i.classList.add('fade'),3000);setTimeout(()=>{i.hidden=true;},4000);}
+  },1000);
+}
+function hideSplash(){videoReady=true;maybeCloseSplash();}
+runSplash();
+/* ---------- 画質（5.7K / 4K）の切り替え ---------- */
+let hls=null,currentEntry=null;
+const gl=renderer.getContext();
+const MAX_TEX=gl.getParameter(gl.MAX_TEXTURE_SIZE)||4096;
+const canHevc=!!(window.MediaSource&&MediaSource.isTypeSupported&&MediaSource.isTypeSupported('video/mp4; codecs="hvc1.1.6.L183.B0"'))||
+  !!(window.ManagedMediaSource&&ManagedMediaSource.isTypeSupported&&ManagedMediaSource.isTypeSupported('video/mp4; codecs="hvc1.1.6.L183.B0"'));
+let quality=(MAX_TEX>=5760&&canHevc)?'high':'std';
+try{const q=localStorage.getItem('cam360q');if(q==='high'||q==='std')quality=q;}catch(e){}
+function pickLevel(){
+  if(!hls||!hls.levels||!hls.levels.length)return;
+  let idx=-1;
+  hls.levels.forEach((l,i)=>{const w=l.width||0;
+    if(quality==='high'?(w>=5000&&MAX_TEX>=w):(w>0&&w<=4096))idx=i;});
+  if(idx<0)idx=hls.levels.findIndex(l=>(l.width||0)<=MAX_TEX);
+  if(idx>=0){hls.currentLevel=idx;hls.loadLevel=idx;}
+  updateQualityUI();
+}
+function updateQualityUI(){const b=$('qualityBtn');if(!b)return;
+  b.textContent='画質：'+(quality==='high'?'高画質 5.7K':'標準 4K');
+  b.disabled=!(currentEntry&&currentEntry.hls&&hls);}
+
+function attachVideo(src,remote,entry){
+  syncOn=false;currentEntry=entry||null;
+  if(hls){hls.destroy();hls=null;}
+  const useHls=entry&&entry.hls&&window.Hls&&Hls.isSupported();
+  if(useHls){
+    hls=new Hls({maxBufferLength:20,maxMaxBufferLength:40,capLevelToPlayerSize:false,startLevel:-1});
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>pickLevel());
+    hls.on(Hls.Events.ERROR,(ev,d)=>{
+      if(!d.fatal)return;
+      if(quality==='high'){quality='std';toast('高画質で再生できないため、標準画質に切り替えます');pickLevel();hls.recoverMediaError();return;}
+      hls.destroy();hls=null;if(entry.file){toast('標準のmp4で再生します');video.src=entry.file;video.load();}else{toast('映像を読み込めませんでした。通信環境を確認して再読み込みしてください');}updateQualityUI();
+    });
+    hls.loadSource(entry.hls);hls.attachMedia(video);
+  }else if(entry&&entry.hls&&!entry.file&&video.canPlayType('application/vnd.apple.mpegurl')){video.src=entry.hls;video.load();}
+  else{video.src=(entry&&entry.file)||src;video.load();}
+  updateQualityUI();
   video.onloadedmetadata=()=>{
-    const r=video.videoWidth/video.videoHeight;
-    if(Math.abs(r-2)>.05)toast('縦横比が2:1ではありません（'+video.videoWidth+'×'+video.videoHeight+'）。360°動画として書き出し直してください');
-    else if(video.videoWidth>4096)toast('4Kを超える動画はiPhoneで表示できないことがあります');
     syncOn=remote&&CONFIG.sync;
     if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}
     tryPlay();
@@ -280,10 +392,10 @@ function attachVideo(src,remote){
     if(videoTex)videoTex.dispose();
     videoTex=new THREE.VideoTexture(video);videoTex.encoding=THREE.sRGBEncoding;
     videoTex.minFilter=THREE.LinearFilter;videoTex.magFilter=THREE.LinearFilter;videoTex.generateMipmaps=false;videoTex.anisotropy=renderer.capabilities.getMaxAnisotropy();
-    mat.map=videoTex;mat.color.set(0xffffff);mat.needsUpdate=true;usingSample=false;$('srcLabel').hidden=true;$('connecting').hidden=true;
+    mat.map=videoTex;mat.color.set(0xffffff);mat.needsUpdate=true;usingSample=false;$('srcLabel').hidden=true;hideSplash();
   };
-  video.onerror=()=>{$('connecting').hidden=true;if(remote&&!videoTex){mat.map=sampleTex;mat.color.set(0xffffff);mat.needsUpdate=true;usingSample=true;$('srcLabel').hidden=false;}
-  if(remote)toast(CONFIG.video+' を読み込めませんでした');else toast('この動画は再生できませんでした');};
+  video.onerror=()=>{if(hls)return;hideSplash();if(remote&&!videoTex){mat.map=sampleTex;mat.color.set(0xffffff);mat.needsUpdate=true;usingSample=true;$('srcLabel').hidden=false;}
+  if(remote)toast('映像を読み込めませんでした');else toast('この動画は再生できませんでした');};
 }
 
 /* 全員の再生位置を現在時刻に合わせる（後から開いた人も同じ瞬間を見る） */
@@ -297,14 +409,16 @@ setInterval(()=>{
 },1000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;tryPlay();}});
 
+if(Array.isArray(window.CAM360_VIDEOS)&&window.CAM360_VIDEOS.length)CONFIG.videos=window.CAM360_VIDEOS;
 if(Array.isArray(CONFIG.videos)&&CONFIG.videos.length){
-  if(!qp.get('v'))CONFIG.video=CONFIG.videos[0].file;
+  let first=CONFIG.videos[0];if(qp.get('v'))first=CONFIG.videos.find(c=>c.file===qp.get('v')||c.label===qp.get('v'))||{file:qp.get('v')};
+  CONFIG.video=first.file||first.hls;CONFIG.entry=first;
   $('clipBox').hidden=false;
-  CONFIG.videos.forEach(c=>{const b=document.createElement('button');b.textContent=c.label||c.file;
-    b.onclick=()=>{CONFIG.video=c.file;attachVideo(c.file,true);toast(b.textContent+' に切り替えました');closeSheet();};
+  CONFIG.videos.forEach(c=>{const b=document.createElement('button');b.textContent=c.label||c.file||c.hls;
+    b.onclick=()=>{CONFIG.video=c.file||c.hls;CONFIG.entry=c;attachVideo(c.file||c.hls,true,c);toast(b.textContent+' に切り替えました');closeSheet();};
     $('clipList').appendChild(b);});
 }
-if(CONFIG.video)attachVideo(CONFIG.video,true);
+if(CONFIG.video)attachVideo(CONFIG.video,true,CONFIG.entry);
 
 $('file').addEventListener('change',e=>{
   const f=e.target.files&&e.target.files[0]; if(!f)return;
@@ -312,6 +426,8 @@ $('file').addEventListener('change',e=>{
   objUrl=URL.createObjectURL(f);attachVideo(objUrl,false);
   toast('手元の動画を再生します（時刻同期はオフ）');closeSheet();
 });
+$('qualityBtn').onclick=()=>{quality=quality==='high'?'std':'high';try{localStorage.setItem('cam360q',quality);}catch(e){}
+  if(quality==='high'&&MAX_TEX<5760)toast('この端末は5.7Kを表示できないため、標準画質になります');pickLevel();toast(($('qualityBtn').textContent));};
 $('sound').onclick=()=>{video.muted=!video.muted;$('sound').textContent='音声：'+(video.muted?'オフ':'オン');if(!video.muted)video.play().catch(()=>{});};
 $('playPause').onclick=()=>{if(video.paused){if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}video.play().catch(()=>{});$('playPause').textContent='一時停止';}else{video.pause();$('playPause').textContent='再生';}};
 
@@ -388,7 +504,7 @@ $('lag').oninput=e=>cfg.lag=e.target.value/100;
 $('tiltMin').oninput=e=>{cfg.tiltMin=+e.target.value;st.tLat=clampLat(st.tLat);};
 $('tiltMax').oninput=e=>{cfg.tiltMax=+e.target.value;st.tLat=clampLat(st.tLat);};
 $('inertia').onchange=e=>cfg.inertia=e.target.checked;
-$('joyOn').onchange=e=>joy.hidden=!e.target.checked;
+$('joyOn').onchange=e=>{joy.hidden=!e.target.checked;$('joyLabel').hidden=!e.target.checked;};
 $('liveOn').onchange=e=>$('liveBadge').hidden=!e.target.checked;
 $('hudOn').onchange=e=>document.body.classList.toggle('hidden-ui',!e.target.checked);
 $('camInput').oninput=e=>$('camName').textContent=e.target.value;
