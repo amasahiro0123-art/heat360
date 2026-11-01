@@ -408,6 +408,8 @@ function activateTile(idx,lon){
   if(old>=0&&old!==idx){const o=multi.slots[old];if(o.h){o.h.destroy();o.h=null;}o.v.pause();o.lon=null;}
   $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[lon]||lon+'°');
 }
+window.__camDebug=()=>({entry:currentEntry&&currentEntry.label,baseT:+(video.currentTime||0).toFixed(2),baseRS:video.readyState,basePaused:video.paused,lon:+st.lon.toFixed(1),
+  cur:multi&&multi.cur,pending:multi&&multi.pending,slots:multi&&multi.slots.map(s=>({lon:s.lon,t:+(s.v.currentTime||0).toFixed(2),rs:s.v.readyState,p:s.v.paused,seek:s.v.seeking})),err:lastErr,badge:$('hqBadge').textContent});
 function multiTick(now){
   if(!multi||!multi.cfg.tiles||!multi.cfg.tiles.length)return;
   const L=((st.lon%360)+360)%360;
