@@ -327,7 +327,7 @@ function tryPlay(){video.play().then(()=>{$('start').hidden=true;}).catch(()=>{$
 $('start').onclick=()=>{if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}tryPlay();};
 
 /* ---------- 接続画面（キャッチコピー → スポンサー → 接続中） ---------- */
-let introShown=false,videoReady=false,splashSeqDone=false,splashClosing=false;
+let lastErr='',introShown=false,videoReady=false,splashSeqDone=false,splashClosing=false;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 if(CONFIG.teamLogo){const t=$('spTeam');t.src=CONFIG.teamLogo;t.hidden=false;t.onerror=()=>{t.hidden=true;};}
 const hasSponsor=!!(CONFIG.sponsorLogo||CONFIG.sponsorName);
@@ -353,7 +353,8 @@ function maybeCloseSplash(){
 }
 function hideSplash(){videoReady=true;maybeCloseSplash();}
 function showLoadError(){const w=$('spWait');w.classList.remove('blink');w.classList.add('on');
-  w.innerHTML='映像を読み込めませんでした<br><button id="reloadBtn" style="margin-top:14px;font:inherit;font-size:14px;letter-spacing:.1em;padding:10px 18px;border-radius:999px;border:1px solid #9aa4a8;background:transparent;color:#fff;pointer-events:auto">再読み込み</button>';
+  const diag=(lastErr||'timeout')+' / rs'+video.readyState+' / mse'+(!!(window.MediaSource||window.ManagedMediaSource)?1:0)+' / hls'+(window.Hls&&Hls.isSupported()?1:0);
+  w.innerHTML='映像を読み込めませんでした<div style="font-size:10px;letter-spacing:0;color:#667;margin-top:6px;font-family:monospace">'+diag+'</div><button id="reloadBtn" style="margin-top:14px;font:inherit;font-size:14px;letter-spacing:.1em;padding:10px 18px;border-radius:999px;border:1px solid #9aa4a8;background:transparent;color:#fff;pointer-events:auto">再読み込み</button>';
   $('connecting').style.pointerEvents='auto';$('reloadBtn').onclick=()=>location.reload();}
 runSplash();
 setTimeout(()=>{if(!videoReady&&!$('connecting').hidden&&REMOTE)showLoadError();},25000);
@@ -454,6 +455,7 @@ function attachVideo(src,remote,entry){
     hls=new Hls({maxBufferLength:10,maxMaxBufferLength:30,capLevelToPlayerSize:false,startLevel:-1,startFragPrefetch:true});
     hls.on(Hls.Events.MANIFEST_PARSED,()=>pickLevel());
     hls.on(Hls.Events.ERROR,(ev,d)=>{
+      lastErr=(d.type||'')+'/'+(d.details||'')+(d.response&&d.response.code?'/'+d.response.code:'');
       if(!d.fatal)return;
       if(quality==='high'){quality='std';toast('高画質で再生できないため、標準画質に切り替えます');pickLevel();hls.recoverMediaError();return;}
       hls.destroy();hls=null;if(entry.file){toast('標準のmp4で再生します');video.src=entry.file;video.load();}else{showLoadError();}updateQualityUI();
@@ -487,7 +489,16 @@ setInterval(()=>{
   let diff=e-video.currentTime;if(diff>d/2)diff-=d;if(diff<-d/2)diff+=d;
   if(Math.abs(diff)>4){video.currentTime=e;lastSyncSeek=performance.now();}
 },2000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;tryPlay();}});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){   // 裏に回ったら再生を止め、高画質版の読み込みも解放（他のタブや次の表示のために資源を空ける）
+    video.pause();
+    if(multi){multi.slots.forEach(sl=>{if(sl.h){sl.h.destroy();sl.h=null;}sl.v.pause();sl.v.removeAttribute('src');sl.v.load();sl.lon=null;});multi.cur=-1;multi.pending=null;if(hqMesh)hqMesh.visible=false;}
+  }else{
+    if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}
+    if($('playPause').textContent==='一時停止')tryPlay();
+  }
+});
+window.addEventListener('pagehide',()=>{try{teardownMulti();if(hls){hls.destroy();hls=null;}video.pause();video.removeAttribute('src');video.load();}catch(e){}});
 
 if(Array.isArray(window.CAM360_VIDEOS)&&window.CAM360_VIDEOS.length)CONFIG.videos=window.CAM360_VIDEOS;
 if(qp.get('multi')&&Array.isArray(window.CAM360_VIDEOS_MULTI)&&window.CAM360_VIDEOS_MULTI.length)CONFIG.videos=window.CAM360_VIDEOS_MULTI;
