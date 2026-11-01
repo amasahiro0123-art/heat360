@@ -56,6 +56,9 @@ button,.filebtn{font:inherit;color:var(--fg);background:var(--panel);border:1px 
 button:focus-visible,.filebtn:focus-within,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #gear{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));width:42px;height:42px;padding:0;display:grid;place-items:center;border-radius:50%}
 #gear svg{width:24px;height:24px}
+#fsBtn{position:fixed;top:calc(58px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));width:42px;height:42px;padding:0;display:grid;place-items:center;border-radius:50%;z-index:2}
+#fsBtn svg{width:22px;height:22px}
+body.hidden-ui #fsBtn{display:none}
 /* ジョイスティック */
 @font-face{font-family:'Montserrat';font-weight:900;font-display:swap;src:url(fonts/montserrat-latin-900-normal.woff2) format('woff2')}
 @font-face{font-family:'Montserrat';font-weight:600;font-display:swap;src:url(fonts/montserrat-latin-600-normal.woff2) format('woff2')}
@@ -155,6 +158,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 </div>
 
 <div id="a2hs" hidden>ブラウザの枠を消して<b>全画面</b>で見るには：下の共有ボタン <span style="font-size:15px">⬆︎</span> →「<b>ホーム画面に追加</b>」→ ホーム画面のアイコンから開いてください<button id="a2hsX" aria-label="閉じる">✕</button></div>
+<button id="fsBtn" aria-label="全画面" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path id="fsIco" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
 <button id="gear" aria-label="設定を開く">
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
 </button>
@@ -377,6 +381,18 @@ function maybeCloseSplash(){
   },1000);
 }
 function hideSplash(){videoReady=true;maybeCloseSplash();}
+/* 全画面ボタン：Android・PC・iPadはそのまま全画面。iPhoneのSafariは仕組み上できないので「ホーム画面に追加」を案内 */
+function isStandalone(){return !!(navigator.standalone||matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches);}
+function fsEl(){return document.fullscreenElement||document.webkitFullscreenElement;}
+function fsUpdate(){$('fsIco').setAttribute('d',fsEl()?'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5':'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5');setTimeout(()=>{try{resize();}catch(e){}},300);}
+{const b=$('fsBtn');if(!isStandalone())b.hidden=false;
+ b.onclick=()=>{const de=document.documentElement;
+   if(fsEl()){(document.exitFullscreen||document.webkitExitFullscreen).call(document);return;}
+   const req=de.requestFullscreen||de.webkitRequestFullscreen;
+   if(req&&(document.fullscreenEnabled||document.webkitFullscreenEnabled)){try{const r=req.call(de,{navigationUI:'hide'});if(r&&r.catch)r.catch(()=>showA2HS(true));}catch(e){showA2HS(true);}}
+   else showA2HS(true);};
+ document.addEventListener('fullscreenchange',fsUpdate);document.addEventListener('webkitfullscreenchange',fsUpdate);}
+function showA2HS(force){const b=$('a2hs');b.hidden=false;$('a2hsX').onclick=()=>{b.hidden=true;if(!force){try{localStorage.setItem('cam360a2hs','9');}catch(e){}}};clearTimeout(window.__a2t);window.__a2t=setTimeout(()=>{b.hidden=true;},15000);}
 function maybeA2HS(){try{const ios=/iPhone|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
   const standalone=navigator.standalone||matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches;
   if(!ios||standalone)return;let n=0;try{n=+(localStorage.getItem('cam360a2hs')||0);}catch(e){}if(n>=3)return;
@@ -795,6 +811,13 @@ function resize(){const p=isPortrait();
     if(!window.__reloading){window.__reloading=true;showReconnect();teardownMulti();setTimeout(()=>location.reload(),350);}return;}
   if(p!==wasPortrait){st.tFov=clampFov(st.tFov*(p?95/70:70/95));wasPortrait=p;}const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
 window.addEventListener('resize',resize);resize();
+/* iPhoneで画面を消して戻したとき・向きを変えたときに、サイズの変化が伝わらず縦横比がくずれることがあるので、こまめに確かめて直す */
+{const again=()=>[60,300,800,1500].forEach(ms=>setTimeout(()=>{resize();applyFrame();},ms));
+ ['orientationchange','pageshow','focus'].forEach(ev=>window.addEventListener(ev,again));
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)again();});
+ if(window.visualViewport)visualViewport.addEventListener('resize',again);
+ setInterval(()=>{const w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;
+   const pr=renderer.getPixelRatio();if(Math.abs(camera.aspect-w/h)>0.01||Math.abs(renderer.domElement.width-Math.floor(w*pr))>2||Math.abs(renderer.domElement.height-Math.floor(h*pr))>2){resize();applyFrame();}},500);}
 const fmt=(v,w,d)=>(v>=0?'+':'-')+Math.abs(v).toFixed(d).padStart(w,'0');
 const target=new THREE.Vector3();let prev=performance.now(),sampleT=0;
 function frame(now){
