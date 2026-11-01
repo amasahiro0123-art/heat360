@@ -395,39 +395,40 @@ function teardownMulti(){
   if(!multi)return;
   multi.slots.forEach(slotStop);multi=null;$('hqBadge').hidden=true;
 }
-// 回線速度の実測（土台・高画質どちらの読み込みからも更新）
-window.__bw=window.__bw||0;   // bytes/秒
-function noteFrag(data){try{const st=(data.frag&&data.frag.stats)||data.stats;if(!st||!st.loaded)return;const l=st.loading||{};const ms=(l.end||0)-(l.start||0);if(ms<30)return;
-  const bw=st.loaded/(ms/1000);window.__bw=window.__bw?window.__bw*0.6+bw*0.4:bw;}catch(e){}}
+// 回線速度の実測（土台・高画質どちらの読み込みからも常に更新）
+window.__bw=window.__bw||0;window.__rtt=window.__rtt||0;   // bytes/秒、最初の1バイトが届くまでの秒数
+function noteFrag(data){try{const st=(data.frag&&data.frag.stats)||data.stats;if(!st||!st.loaded)return;const l=st.loading||{};const ms=(l.end||0)-(l.start||0);if(ms<30)return;   // キャッシュから即時に来たものは除く
+  const rtt=Math.max(0,((l.first||l.start)-(l.start||0))/1000),tx=Math.max(0.02,ms/1000-rtt);
+  const bw=st.loaded/tx;window.__bw=window.__bw?window.__bw*0.5+bw*0.5:bw;window.__rtt=window.__rtt?window.__rtt*0.5+rtt*0.5:rtt;}catch(e){}}
+function segFetchSec(s){   // 高画質の1区切り分を取るのにかかる見込み時間（一覧・初期化・本体で3往復＋転送）
+  const seg=(s&&s.segBytes)||1.4e6;if(!window.__bw)return 1.0;
+  return 3*(window.__rtt||0.1)+seg/window.__bw;}
 function baseDur(){return video.duration&&isFinite(video.duration)?video.duration:1e9;}
 function relT(T){const D=baseDur();let d=T-(video.currentTime||0);if(D<1e8){if(d>D/2)d-=D;if(d<-D/2)d+=D;}return d;}   // 土台から見て T まであと何秒か
-function slotLoad(s){   // 「待ち合わせ」方式：読み込みにかかる時間を見積もって、少し先の区切り(1秒単位)から読み、その時刻に土台と同時に再生を始める
+function slotLoad(s){   // 「待ち合わせ」方式：回線速度から見込み時間を出し、その2倍先を待ち合わせ時刻にして、その時刻に土台と同時に再生を始める
   if(s.h){s.h.destroy();s.h=null;}s.v.pause();s.v.playbackRate=1;s.bad=0;s.loadedAt=performance.now();s.armed=false;s.started=false;s.ready=false;
-  const seg=s.segBytes||1.4e6, bw=window.__bw;
-  const est=window.__loadLat||(bw?seg/bw+0.4:1.5);  // 読み込み開始→準備完了までの実測（初回は回線速度から見積もり）
-  const need=Math.max(0.4,est*(window.__dlMul||1.25)+0.15);   // 余裕込み
-  const D=baseDur(),off=window.__segOff||0.1;      // 区切りの位置（実測：各区切りは約0.1秒ずれて始まる）
-  let T=Math.ceil((video.currentTime||0)+Math.min(8,need)-off)+off;
-  if(D<1e8&&T>=D-0.5)T=off;                         // 最後をまたぐときは先頭で待ち合わせ
-  s.T=T;
+  const lead=Math.min(8,Math.max(0.4,segFetchSec(s)*2+(window.__missAdd||0)));   // 回線速度に比例して変わる
+  const D=baseDur();let T=(video.currentTime||0)+lead;
+  if(D<1e8&&T>=D-0.3)T=(window.__segOff||0.1)+Math.max(0,T-D);   // 最後をまたぐときは先頭側で待ち合わせ
+  s.T=T;s.lead=lead;
   if(window.Hls&&Hls.isSupported()){
-    s.h=new Hls({maxBufferLength:4,maxMaxBufferLength:8,startPosition:T+0.05,autoStartLoad:true});
+    s.h=new Hls({maxBufferLength:4,maxMaxBufferLength:8,startPosition:T,autoStartLoad:true});
     s.h.on(Hls.Events.FRAG_LOADED,(e,d)=>{noteFrag(d);try{if(d.frag&&d.frag.stats&&d.frag.stats.loaded>2e5)s.segBytes=s.segBytes?s.segBytes*0.5+d.frag.stats.loaded*0.5:d.frag.stats.loaded;}catch(_){}});
     s.h.loadSource(s.url);s.h.attachMedia(s.v);
   }else{s.v.src=s.url;s.v.addEventListener('loadedmetadata',()=>{try{s.v.currentTime=T;}catch(e){}},{once:true});}
 }
-function slotArmCheck(s,now){   // 毎フレーム：待ち合わせ時刻に合わせて再生開始
+function slotArmCheck(s,now){   // 細かく確認：待ち合わせ時刻に合わせて再生開始
   if(s.lon===null||s.started)return;
   const v=s.v;
-  if(!s.armed){const b=v.buffered;let ok=false;for(let i=0;i<b.length;i++){if(b.start(i)<=s.T+0.05&&b.end(i)>=s.T+0.6)ok=true;}
+  if(!s.armed){const b=v.buffered;let ok=false;for(let i=0;i<b.length;i++){if(b.start(i)<=s.T+0.02&&b.end(i)>=s.T+0.2)ok=true;}
     if(b.length&&window.__segOff==null){const f=b.start(0)-Math.floor(b.start(0));if(f<0.5)window.__segOff=f;}
     if(ok&&v.readyState>=2){if(Math.abs(v.currentTime-s.T)>0.05){try{v.currentTime=s.T;}catch(e){}}s.armed=true;s.armedAt=now;
       const lat=(now-s.loadedAt)/1000;window.__loadLat=window.__loadLat?window.__loadLat*0.6+lat*0.4:lat;}}
   const d=relT(s.T);
   if(s.armed&&!v.seeking){
-    if(d<=0.02&&d>-0.5&&!video.paused){try{v.currentTime=s.T-d;}catch(e){}v.play().catch(()=>{});s.started=true;s.ready=true;window.__dlMul=Math.max(1.15,(window.__dlMul||1.25)*0.95);return;}
+    if(d<=0.02&&d>-0.5&&!video.paused){try{v.currentTime=s.T-d;}catch(e){}v.play().catch(()=>{});s.started=true;s.ready=true;window.__missAdd=Math.max(0,(window.__missAdd||0)-0.1);return;}
   }
-  if(d<-0.5){const el=(now-s.loadedAt)/1000;if(!s.armed)window.__loadLat=Math.max(window.__loadLat||0,el)*1.2;window.__dlMul=Math.min(3,(window.__dlMul||1.25)*1.3);slotLoad(s);}   // 間に合わなかった→余裕を増やしてやり直し
+  if(d<-0.5){window.__missAdd=Math.min(3,(window.__missAdd||0)+0.3);slotLoad(s);}   // 間に合わなかった→少し余裕を足してやり直し（成功すると戻る）
 }
 function requestTile(t){
   const idx=multi.cur===0?1:0,s=multi.slots[idx];
@@ -440,7 +441,7 @@ function activateTile(idx){
   multi.fade={idx,old:multi.cur,start:performance.now()};
   multi.cur=idx;
   const sec=multi.reqAt?((performance.now()-multi.reqAt)/1000).toFixed(1):null;multi.lastSec=sec;
-  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||dirName(s.lon))+(multi.cfg.orient?(multi.cfg.orient==='portrait'?'（縦用）':'（横用）'):'')+(sec?' '+sec+'秒':'');
+  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||dirName(s.lon))+(multi.cfg.orient?(multi.cfg.orient==='portrait'?'（縦用）':'（横用）'):'')+(sec?' '+sec+'秒':'')+(window.__bw?'（回線'+(window.__bw*8/1e6).toFixed(0)+'Mbps・'+(s.lead||0).toFixed(1)+'秒先で待ち合わせ）':'');
 }
 function syncTo(v,now,sl){   // 土台との再生位置のずれを0.1秒以内に保つ（速度を少し変えてなめらかに追いつかせる）
   if(sl&&!sl.started)return 9;
@@ -454,7 +455,7 @@ function syncTo(v,now,sl){   // 土台との再生位置のずれを0.1秒以内
   return Math.abs(diff);
 }
 window.__camDebug=()=>({entry:currentEntry&&currentEntry.label,baseT:+(video.currentTime||0).toFixed(2),baseRS:video.readyState,lon:+st.lon.toFixed(1),
-  cur:multi&&multi.cur,pending:multi&&multi.pending,spd:multi&&Math.round(multi.spd||0),lastSec:multi&&multi.lastSec,lat:window.__loadLat&&+window.__loadLat.toFixed(2),bwMbps:window.__bw&&+(window.__bw*8/1e6).toFixed(1),slots:multi&&multi.slots.map(s=>({lon:s.lon,t:+(s.v.currentTime||0).toFixed(2),rs:s.v.readyState,p:s.v.paused,rate:s.v.playbackRate,T:s.T,armed:!!s.armed,started:!!s.started,mul:window.__dlMul})),err:lastErr,badge:$('hqBadge').textContent});
+  cur:multi&&multi.cur,pending:multi&&multi.pending,spd:multi&&Math.round(multi.spd||0),lastSec:multi&&multi.lastSec,lat:window.__loadLat&&+window.__loadLat.toFixed(2),bwMbps:window.__bw&&+(window.__bw*8/1e6).toFixed(1),slots:multi&&multi.slots.map(s=>({lon:s.lon,t:+(s.v.currentTime||0).toFixed(2),rs:s.v.readyState,p:s.v.paused,rate:s.v.playbackRate,T:s.T,armed:!!s.armed,started:!!s.started,lead:s.lead,rtt:window.__rtt})),err:lastErr,badge:$('hqBadge').textContent});
 setInterval(()=>{if(multi)multi.slots.forEach(sl=>slotArmCheck(sl,performance.now()));},20);   // 画面の描きかえとは別に、待ち合わせを細かく確認
 function multiTick(now){
   if(!multi||!multi.cfg.tiles||!multi.cfg.tiles.length)return;
