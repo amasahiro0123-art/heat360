@@ -296,7 +296,7 @@ if(REMOTE){mat.map=null;mat.color.set(0x000000);}else{mat.map=sampleTex;$('conne
 
 /* ---------- 動画 ---------- */
 const video=document.createElement('video');
-video.muted=true;video.loop=true;video.playsInline=true;video.setAttribute('playsinline','');video.crossOrigin='anonymous';
+video.muted=true;video.loop=true;video.disableRemotePlayback=true;video.playsInline=true;video.setAttribute('playsinline','');video.crossOrigin='anonymous';
 let videoTex=null,objUrl=null;
 /* ---------- 設定（config.js または URLの ?v=ファイル名 で上書き） ---------- */
 const CONFIG=Object.assign({video:'video.mp4',sync:false,epoch:'2026-01-01T00:00:00+09:00',camName:null},window.CAM360_CONFIG||{});
@@ -369,7 +369,7 @@ function edgeAlphaTex(){const c=document.createElement('canvas');c.width=256;c.h
   x.fillStyle=gv;x.fillRect(0,0,256,128);const t=new THREE.CanvasTexture(c);return t;}
 function sphereAt(lonC,h,v,r){const H=THREE.MathUtils.degToRad(h),V=THREE.MathUtils.degToRad(v);
   const g=new THREE.SphereGeometry(r,64,32,THREE.MathUtils.degToRad(lonC)-H/2,H,Math.PI/2-V/2,V);g.scale(-1,1,1);return g;}
-function newHqVideo(){const v=document.createElement('video');v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.crossOrigin='anonymous';v.loop=true;v.preload='auto';return v;}
+function newHqVideo(){const v=document.createElement('video');v.disableRemotePlayback=true;v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.crossOrigin='anonymous';v.loop=true;v.preload='auto';return v;}
 function setupMulti(cfgM){
   teardownMulti();
   if(!hqMat){hqMat=new THREE.MeshBasicMaterial({transparent:true,alphaMap:edgeAlphaTex(),depthWrite:false});
@@ -389,9 +389,9 @@ function requestTile(t){
   multi.pending=t.lon;
   if(s.h){s.h.destroy();s.h=null;}
   s.lon=t.lon;s.v.onloadedmetadata=null;s.v.onplaying=null;
-  if(window.Hls&&Hls.isSupported()){s.h=new Hls({maxBufferLength:8,maxMaxBufferLength:16,startPosition:Math.max(0,video.currentTime||0)});s.h.loadSource(t.hls);s.h.attachMedia(s.v);}
+  if(window.Hls&&Hls.isSupported()){s.h=new Hls({maxBufferLength:8,maxMaxBufferLength:16,startPosition:Math.max(0,(video.currentTime||0)+0.3)});s.h.loadSource(t.hls);s.h.attachMedia(s.v);}
   else{s.v.src=t.hls;}
-  s.v.onloadedmetadata=()=>{try{s.v.currentTime=Math.min((video.currentTime||0)+0.15,(s.v.duration||1)-0.1);}catch(e){}
+  s.v.onloadedmetadata=()=>{if(!s.h){try{s.v.currentTime=Math.min((video.currentTime||0)+0.15,(s.v.duration||1)-0.1);}catch(e){}}   // hls.jsは開始位置を指定済み
     s.v.play().catch(()=>{});};
   s.v.onplaying=()=>{
     const go=()=>activateTile(idx,t.lon);
@@ -418,10 +418,12 @@ function multiTick(now){
   if(curLon===null){if(multi.pending===null&&video.readyState>=2)requestTile(best);}
   else if(best.lon!==curLon&&angDist(L,curLon)>360/multi.cfg.tiles.length/2+5)requestTile(best);   // 隣の方向の中間を少し越えたら切り替える
   // 高画質版を土台の再生位置に合わせる
-  if(multi.cur>=0&&now-multi.lastSync>500){multi.lastSync=now;const v=multi.slots[multi.cur].v;
+  if(multi.cur>=0&&now-multi.lastSync>1000){multi.lastSync=now;const v=multi.slots[multi.cur].v;
     if(video.paused&&!v.paused)v.pause();else if(!video.paused&&v.paused)v.play().catch(()=>{});
+    // ずれが大きいときだけ合わせる（合わせた後4秒は様子を見る。読み込み中は触らない）
     const d=Math.abs((v.currentTime||0)-(video.currentTime||0));
-    if(d>0.25&&d<(video.duration||999)-1&&!v.seeking&&v.readyState>=2){try{v.currentTime=video.currentTime+0.05;}catch(e){}}}
+    if(d>0.8&&d<(video.duration||999)-1.5&&!v.seeking&&v.readyState>=3&&now-(multi.lastSeek||0)>4000){
+      multi.lastSeek=now;try{v.currentTime=video.currentTime+0.1;}catch(e){}}}
 }
 
 /* ---------- 画質（5.7K / 4K）の切り替え ---------- */
