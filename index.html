@@ -191,7 +191,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 const $=id=>document.getElementById(id);
 const stage=$('stage');
 const renderer=new THREE.WebGLRenderer({antialias:false});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,3));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
 renderer.outputEncoding=THREE.sRGBEncoding;
 stage.appendChild(renderer.domElement);
 const scene=new THREE.Scene();
@@ -352,8 +352,8 @@ const gl=renderer.getContext();
 const MAX_TEX=gl.getParameter(gl.MAX_TEXTURE_SIZE)||4096;
 const canHevc=!!(window.MediaSource&&MediaSource.isTypeSupported&&MediaSource.isTypeSupported('video/mp4; codecs="hvc1.1.6.L183.B0"'))||
   !!(window.ManagedMediaSource&&ManagedMediaSource.isTypeSupported&&ManagedMediaSource.isTypeSupported('video/mp4; codecs="hvc1.1.6.L183.B0"'));
-let quality=(MAX_TEX>=5760&&canHevc)?'high':'std';
-try{const q=localStorage.getItem('cam360q');if(q==='high'||q==='std')quality=q;}catch(e){}
+let quality='std';  // 既定は4K（5.7Kは端末によってはコマ落ちするため、選んだ人だけ）
+try{const q=localStorage.getItem('cam360q2');if((q==='high'&&MAX_TEX>=5760&&canHevc)||q==='std')quality=q;}catch(e){}
 function pickLevel(){
   if(!hls||!hls.levels||!hls.levels.length)return;
   let idx=-1;
@@ -398,15 +398,16 @@ function attachVideo(src,remote,entry){
   if(remote)toast('映像を読み込めませんでした');else toast('この動画は再生できませんでした');};
 }
 
-/* 全員の再生位置を現在時刻に合わせる（後から開いた人も同じ瞬間を見る） */
+/* 全員の再生位置を現在時刻に合わせる（後から開いた人も同じ瞬間を見る）
+   ・読み込み待ちの間は何もしない ・大きくずれたときだけ飛ばす ・飛ばした後10秒は様子を見る */
+let lastSyncSeek=0;
 setInterval(()=>{
-  if(!syncOn||video.paused||video.seeking)return;
+  if(!syncOn||video.paused||video.seeking||video.readyState<3)return;
+  if(performance.now()-lastSyncSeek<10000)return;
   const e=expectedTime();if(e==null)return;const d=video.duration;
   let diff=e-video.currentTime;if(diff>d/2)diff-=d;if(diff<-d/2)diff+=d;
-  if(Math.abs(diff)>1){video.currentTime=e;video.playbackRate=1;}
-  else if(Math.abs(diff)>.08){video.playbackRate=1+Math.max(-.05,Math.min(.05,diff*.5));}
-  else video.playbackRate=1;
-},1000);
+  if(Math.abs(diff)>4){video.currentTime=e;lastSyncSeek=performance.now();}
+},2000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;tryPlay();}});
 
 if(Array.isArray(window.CAM360_VIDEOS)&&window.CAM360_VIDEOS.length)CONFIG.videos=window.CAM360_VIDEOS;
@@ -426,8 +427,8 @@ $('file').addEventListener('change',e=>{
   objUrl=URL.createObjectURL(f);attachVideo(objUrl,false);
   toast('手元の動画を再生します（時刻同期はオフ）');closeSheet();
 });
-$('qualityBtn').onclick=()=>{quality=quality==='high'?'std':'high';try{localStorage.setItem('cam360q',quality);}catch(e){}
-  if(quality==='high'&&MAX_TEX<5760)toast('この端末は5.7Kを表示できないため、標準画質になります');pickLevel();toast(($('qualityBtn').textContent));};
+$('qualityBtn').onclick=()=>{quality=quality==='high'?'std':'high';try{localStorage.setItem('cam360q2',quality);}catch(e){}
+  if(quality==='high'&&MAX_TEX<5760)toast('この端末は5.7Kを表示できないため、標準画質になります');pickLevel();toast(quality==='high'?'高画質(5.7K)にしました。カクつく場合は標準に戻してください':'標準画質(4K)にしました');};
 $('sound').onclick=()=>{video.muted=!video.muted;$('sound').textContent='音声：'+(video.muted?'オフ':'オン');if(!video.muted)video.play().catch(()=>{});};
 $('playPause').onclick=()=>{if(video.paused){if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}video.play().catch(()=>{});$('playPause').textContent='一時停止';}else{video.pause();$('playPause').textContent='再生';}};
 
