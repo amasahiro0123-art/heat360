@@ -358,72 +358,82 @@ function showLoadError(){const w=$('spWait');w.classList.remove('blink');w.class
   $('connecting').style.pointerEvents='auto';$('reloadBtn').onclick=()=>location.reload();}
 runSplash();
 setTimeout(()=>{if(!videoReady&&!$('connecting').hidden&&REMOTE)showLoadError();},25000);
-/* ---------- 4方向切り替え（低画質の全周を土台に、見ている方向の高画質180°を重ねる） ---------- */
-let multi=null,hqMesh=null,hqMat=null;
+/* ---------- 方向切り替え（低画質の全周を土台に、見ている方向の高画質版を重ねる） ---------- */
+let multi=null,edgeTex=null;
 const MULTI_NAMES={180:'正面',225:'右前',270:'右',315:'右後ろ',0:'後ろ',45:'左後ろ',90:'左',135:'左前'};
+const SYNC_TOL=0.1;        // 土台とのずれの許容（秒）
+const FADE_MS=350;         // 高画質版の切り替えをなめらかにする時間
 function angDist(a,b){let d=((a-b)%360+540)%360-180;return Math.abs(d);}
 function edgeAlphaTex(){const c=document.createElement('canvas');c.width=256;c.height=128;const x=c.getContext('2d');
   const gh=x.createLinearGradient(0,0,256,0);gh.addColorStop(0,'#000');gh.addColorStop(.06,'#fff');gh.addColorStop(.94,'#fff');gh.addColorStop(1,'#000');
   x.fillStyle=gh;x.fillRect(0,0,256,128);x.globalCompositeOperation='multiply';
   const gv=x.createLinearGradient(0,0,0,128);gv.addColorStop(0,'#000');gv.addColorStop(.08,'#fff');gv.addColorStop(.92,'#fff');gv.addColorStop(1,'#000');
-  x.fillStyle=gv;x.fillRect(0,0,256,128);const t=new THREE.CanvasTexture(c);return t;}
+  x.fillStyle=gv;x.fillRect(0,0,256,128);return new THREE.CanvasTexture(c);}
 function sphereAt(lonC,h,v,r){const H=THREE.MathUtils.degToRad(h),V=THREE.MathUtils.degToRad(v);
   const g=new THREE.SphereGeometry(r,64,32,THREE.MathUtils.degToRad(lonC)-H/2,H,Math.PI/2-V/2,V);g.scale(-1,1,1);return g;}
 function newHqVideo(){const v=document.createElement('video');v.disableRemotePlayback=true;v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.crossOrigin='anonymous';v.loop=true;v.preload='auto';return v;}
+function newSlot(i){
+  if(!edgeTex)edgeTex=edgeAlphaTex();
+  const v=newHqVideo();
+  const tex=new THREE.VideoTexture(v);tex.encoding=THREE.sRGBEncoding;tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,alphaMap:edgeTex,depthWrite:false,opacity:0});
+  const mesh=new THREE.Mesh(sphereAt(180,180,90,480-i*2),mat);mesh.visible=false;mesh.renderOrder=1;scene.add(mesh);
+  return {v,h:null,tex,mat,mesh,lon:null,ready:false};
+}
+function slotStop(sl){if(sl.h){sl.h.destroy();sl.h=null;}sl.v.pause();sl.v.removeAttribute('src');sl.v.load();sl.lon=null;sl.ready=false;sl.mesh.visible=false;sl.mat.opacity=0;sl.v.playbackRate=1;}
 function setupMulti(cfgM){
   teardownMulti();
-  if(!hqMat){hqMat=new THREE.MeshBasicMaterial({transparent:true,alphaMap:edgeAlphaTex(),depthWrite:false});
-    hqMesh=new THREE.Mesh(sphereAt(180,cfgM.hfov||180,cfgM.vfov||90,480),hqMat);hqMesh.renderOrder=1;scene.add(hqMesh);}
-  hqMesh.visible=false;
-  multi={cfg:cfgM,slots:[{v:newHqVideo(),h:null,tex:null,lon:null},{v:newHqVideo(),h:null,tex:null,lon:null}],cur:-1,pending:null,lastSync:0};
+  if(!window.__slots)window.__slots=[newSlot(0),newSlot(1)];
+  multi={cfg:cfgM,slots:window.__slots,cur:-1,pending:null,lastSync:0,fade:null};
+  multi.slots.forEach(slotStop);
   $('hqBadge').hidden=false;$('hqBadge').textContent='高画質エリア：読み込み中';
 }
 function teardownMulti(){
   if(!multi)return;
-  multi.slots.forEach(s=>{if(s.h)s.h.destroy();s.v.pause();s.v.removeAttribute('src');s.v.load();if(s.tex)s.tex.dispose();});
-  multi=null;if(hqMesh)hqMesh.visible=false;$('hqBadge').hidden=true;
+  multi.slots.forEach(slotStop);multi=null;$('hqBadge').hidden=true;
 }
 function requestTile(t){
-  if(multi.pending===t.lon)return;
   const idx=multi.cur===0?1:0,s=multi.slots[idx];
-  multi.pending=t.lon;
-  if(s.h){s.h.destroy();s.h=null;}
-  s.lon=t.lon;s.v.onloadedmetadata=null;s.v.onplaying=null;
+  slotStop(s);multi.pending=t.lon;s.lon=t.lon;
   if(window.Hls&&Hls.isSupported()){s.h=new Hls({maxBufferLength:8,maxMaxBufferLength:16,startPosition:Math.max(0,(video.currentTime||0)+0.3)});s.h.loadSource(t.hls);s.h.attachMedia(s.v);}
   else{s.v.src=t.hls;}
-  s.v.onloadedmetadata=()=>{if(!s.h){try{s.v.currentTime=Math.min((video.currentTime||0)+0.15,(s.v.duration||1)-0.1);}catch(e){}}   // hls.jsは開始位置を指定済み
-    s.v.play().catch(()=>{});};
-  s.v.onplaying=()=>{
-    const go=()=>activateTile(idx,t.lon);
-    if(s.v.requestVideoFrameCallback)s.v.requestVideoFrameCallback(()=>go());else setTimeout(go,120);
-  };
+  s.v.onloadedmetadata=()=>{if(!s.h){try{s.v.currentTime=Math.min((video.currentTime||0)+0.15,(s.v.duration||1)-0.1);}catch(e){}}s.v.play().catch(()=>{});};
+  s.v.onplaying=()=>{s.ready=true;};   // 再生が始まったら、ずれが0.1秒以内になるのを待って切り替える（multiTick側）
 }
-function activateTile(idx,lon){
-  if(!multi||multi.pending!==lon||multi.slots[idx].lon!==lon)return;
+function activateTile(idx){
   const s=multi.slots[idx];multi.pending=null;
-  if(!s.tex){s.tex=new THREE.VideoTexture(s.v);s.tex.encoding=THREE.sRGBEncoding;s.tex.minFilter=THREE.LinearFilter;s.tex.magFilter=THREE.LinearFilter;s.tex.generateMipmaps=false;}
-  hqMat.map=s.tex;hqMat.needsUpdate=true;
-  hqMesh.geometry.dispose();hqMesh.geometry=sphereAt(lon,multi.cfg.hfov||180,multi.cfg.vfov||90,480);hqMesh.visible=true;
-  const old=multi.cur;multi.cur=idx;
-  if(old>=0&&old!==idx){const o=multi.slots[old];if(o.h){o.h.destroy();o.h=null;}o.v.pause();o.lon=null;}
-  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[lon]||lon+'°');
+  s.mesh.geometry.dispose();s.mesh.geometry=sphereAt(s.lon,multi.cfg.hfov||180,multi.cfg.vfov||90,480-idx*2);
+  s.mat.opacity=0;s.mesh.visible=true;s.mesh.renderOrder=2;multi.slots[1-idx].mesh.renderOrder=1;
+  multi.fade={idx,old:multi.cur,start:performance.now()};
+  multi.cur=idx;
+  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||s.lon+'°');
 }
-window.__camDebug=()=>({entry:currentEntry&&currentEntry.label,baseT:+(video.currentTime||0).toFixed(2),baseRS:video.readyState,basePaused:video.paused,lon:+st.lon.toFixed(1),
-  cur:multi&&multi.cur,pending:multi&&multi.pending,slots:multi&&multi.slots.map(s=>({lon:s.lon,t:+(s.v.currentTime||0).toFixed(2),rs:s.v.readyState,p:s.v.paused,seek:s.v.seeking})),err:lastErr,badge:$('hqBadge').textContent});
+function syncTo(v,now){   // 土台との再生位置のずれを0.1秒以内に保つ（速度を少し変えてなめらかに追いつかせる）
+  if(video.paused&&!v.paused)v.pause();else if(!video.paused&&v.paused)v.play().catch(()=>{});
+  if(v.readyState<2||v.seeking)return 9;
+  const dur=video.duration||999;let diff=(video.currentTime||0)-(v.currentTime||0);
+  if(diff>dur/2)diff-=dur;if(diff<-dur/2)diff+=dur;
+  if(Math.abs(diff)>0.3){if(now-(v._lastSeek||0)>1500){v._lastSeek=now;try{v.currentTime=video.currentTime+0.05;}catch(e){}}v.playbackRate=1;}
+  else if(Math.abs(diff)>0.03){v.playbackRate=Math.max(0.85,Math.min(1.15,1+diff*1.2));}
+  else v.playbackRate=1;
+  return Math.abs(diff);
+}
+window.__camDebug=()=>({entry:currentEntry&&currentEntry.label,baseT:+(video.currentTime||0).toFixed(2),baseRS:video.readyState,lon:+st.lon.toFixed(1),
+  cur:multi&&multi.cur,pending:multi&&multi.pending,slots:multi&&multi.slots.map(s=>({lon:s.lon,t:+(s.v.currentTime||0).toFixed(2),rs:s.v.readyState,p:s.v.paused,rate:s.v.playbackRate})),err:lastErr,badge:$('hqBadge').textContent});
 function multiTick(now){
   if(!multi||!multi.cfg.tiles||!multi.cfg.tiles.length)return;
   const L=((st.lon%360)+360)%360;
   let best=multi.cfg.tiles[0];multi.cfg.tiles.forEach(t=>{if(angDist(L,t.lon)<angDist(L,best.lon))best=t;});
   const curLon=multi.cur>=0?multi.slots[multi.cur].lon:null;
-  if(curLon===null){if(multi.pending===null&&video.readyState>=2)requestTile(best);}
-  else if(best.lon!==curLon&&angDist(L,curLon)>360/multi.cfg.tiles.length/2+5)requestTile(best);   // 隣の方向の中間を少し越えたら切り替える
-  // 高画質版を土台の再生位置に合わせる
-  if(multi.cur>=0&&now-multi.lastSync>1000){multi.lastSync=now;const v=multi.slots[multi.cur].v;
-    if(video.paused&&!v.paused)v.pause();else if(!video.paused&&v.paused)v.play().catch(()=>{});
-    // ずれが大きいときだけ合わせる（合わせた後4秒は様子を見る。読み込み中は触らない）
-    const d=Math.abs((v.currentTime||0)-(video.currentTime||0));
-    if(d>0.8&&d<(video.duration||999)-1.5&&!v.seeking&&v.readyState>=3&&now-(multi.lastSeek||0)>4000){
-      multi.lastSeek=now;try{v.currentTime=video.currentTime+0.1;}catch(e){}}}
+  if(multi.pending===null&&!multi.fade){
+    if(curLon===null){if(video.readyState>=2)requestTile(best);}
+    else if(best.lon!==curLon&&angDist(L,curLon)>360/multi.cfg.tiles.length/2+5)requestTile(best);
+  }
+  if(now-multi.lastSync>150){multi.lastSync=now;
+    multi.slots.forEach((s,i)=>{if(s.lon===null)return;const d=syncTo(s.v,now);
+      if(i!==multi.cur&&multi.pending===s.lon&&s.ready&&d<=SYNC_TOL)activateTile(i);});}
+  if(multi.fade){const f=multi.fade,k=Math.min(1,(now-f.start)/FADE_MS);multi.slots[f.idx].mat.opacity=k;
+    if(k>=1){if(f.old>=0&&f.old!==f.idx)slotStop(multi.slots[f.old]);multi.fade=null;}}
 }
 
 /* ---------- 画質（5.7K / 4K）の切り替え ---------- */
@@ -496,7 +506,7 @@ setInterval(()=>{
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){   // 裏に回ったら再生を止め、高画質版の読み込みも解放（他のタブや次の表示のために資源を空ける）
     video.pause();
-    if(multi){multi.slots.forEach(sl=>{if(sl.h){sl.h.destroy();sl.h=null;}sl.v.pause();sl.v.removeAttribute('src');sl.v.load();sl.lon=null;});multi.cur=-1;multi.pending=null;if(hqMesh)hqMesh.visible=false;}
+    if(multi){multi.slots.forEach(sl=>slotStop(sl));multi.cur=-1;multi.pending=null;multi.fade=null;}
   }else{
     if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}
     if($('playPause').textContent==='一時停止')tryPlay();
@@ -627,6 +637,10 @@ function frame(now){
   if(pointers.size===0&&!tLast&&(st.vLon||st.vLat)){st.tLon+=st.vLon;st.tLat=clampLat(st.tLat+st.vLat);st.vLon*=.93;st.vLat*=.93;
     if(Math.abs(st.vLon)<.005&&Math.abs(st.vLat)<.005)st.vLon=st.vLat=0;}
   if(needCenter){st.tLon=st.lon=180;st.tLat=st.lat=0;needCenter=false;}
+  if(multi&&multi.cfg.vfov){                  // 試作版：画面の上下が高画質の範囲から出ないようにする
+    const V=multi.cfg.vfov;st.tFov=Math.min(st.tFov,V-8);
+    const limV=Math.max(0,V/2-st.tFov/2*1.06-2);st.tLat=Math.max(-limV,Math.min(limV,st.tLat));
+  }
   if(RANGE.h<360||RANGE.v<180){              // 映像の外（黒い部分）が見えないように制限
     st.tFov=Math.min(st.tFov,RANGE.v-2);
     const halfV=st.tFov/2,halfH=THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(halfV))*camera.aspect));
