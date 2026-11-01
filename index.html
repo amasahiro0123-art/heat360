@@ -336,17 +336,13 @@ if(CONFIG.sponsorName){$('spSName').textContent=CONFIG.sponsorName;$('spSName').
 async function runSplash(){
   if($('connecting').hidden)return;
   await wait(50);
-  $('spName').classList.add('on');$('spCopy').classList.add('on');$('spTeam').classList.add('on');   // ① 名前とキャッチコピーを1秒でフェードイン
-  await wait(1000);
-  if(hasSponsor){
-    $('spSponsor').classList.add('on');                               // ② presented by スポンサーを1秒でフェードイン
-    await wait(1000+1500);                                            //    スポンサーを見せる時間
-  }else{
-    await wait(1200);
-  }
-  splashSeqDone=true;                                                 // オープニング終了
-  if(!videoReady)$('spWait').classList.add('blink');                  // ③ まだつながっていなければ「接続中…」を点滅
-  maybeCloseSplash();                                                 // ④ つながっていれば1秒でフェードアウト
+  // 名前・キャッチコピー・スポンサー・チームロゴを同時に1秒でフェードイン
+  $('spName').classList.add('on');$('spCopy').classList.add('on');$('spTeam').classList.add('on');
+  if(hasSponsor)$('spSponsor').classList.add('on');
+  await wait(1000+1500);                                              // フェードイン＋見せる時間
+  splashSeqDone=true;
+  if(!videoReady)$('spWait').classList.add('blink');                  // まだつながっていなければ「CONNECTING…」を点滅
+  maybeCloseSplash();                                                 // つながっていれば1秒でフェードアウト
 }
 function maybeCloseSplash(){
   if(!videoReady||!splashSeqDone||splashClosing)return;
@@ -455,7 +451,7 @@ function attachVideo(src,remote,entry){
   if(hls){hls.destroy();hls=null;}
   const useHls=entry&&entry.hls&&window.Hls&&Hls.isSupported();
   if(useHls){
-    hls=new Hls({maxBufferLength:20,maxMaxBufferLength:40,capLevelToPlayerSize:false,startLevel:-1});
+    hls=new Hls({maxBufferLength:10,maxMaxBufferLength:30,capLevelToPlayerSize:false,startLevel:-1,startFragPrefetch:true});
     hls.on(Hls.Events.MANIFEST_PARSED,()=>pickLevel());
     hls.on(Hls.Events.ERROR,(ev,d)=>{
       if(!d.fatal)return;
