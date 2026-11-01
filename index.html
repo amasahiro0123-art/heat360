@@ -105,6 +105,12 @@ button:focus-visible,.filebtn:focus-within,input:focus-visible{outline:2px solid
 .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .note{font-size:12px;color:var(--dim);line-height:1.7;margin:0}
 hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
+#seek{position:fixed;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(184px + env(safe-area-inset-bottom,0px));max-width:720px;margin:0 auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:12px;padding:8px 12px;z-index:3;opacity:0;transition:opacity .25s;pointer-events:none;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+#seek.on{opacity:1;pointer-events:auto}
+#seek button{padding:6px 10px;border-radius:8px;font-size:12px}
+#seekR{flex:1;min-width:120px;accent-color:var(--accent)}
+#chapters{display:flex;gap:6px;flex-wrap:wrap;width:100%}
+#chapters:empty{display:none}
 #toast{position:fixed;left:50%;bottom:calc(160px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:8px 14px;border-radius:8px;font-size:13px;max-width:calc(100% - 32px);opacity:0;transition:opacity .25s;pointer-events:none;z-index:30}
 #toast.show{opacity:1}
 #start{position:fixed;inset:0;margin:auto;width:max-content;height:max-content;padding:16px 26px;font-size:16px;font-weight:700;background:var(--accent);color:#06201c;border:0;border-radius:999px;z-index:25}
@@ -130,6 +136,12 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
   <span><span class="dim">PAN </span><span class="val" id="pan">+000.0°</span></span>
   <span><span class="dim">TILT</span> <span class="val" id="tilt">+00.0°</span></span>
   <span><span class="dim">ZOOM</span> <span class="val" id="zoom">1.0x</span></span>
+</div>
+
+<div id="seek" aria-label="再生位置">
+  <button id="spBtn" aria-label="再生・一時停止">❚❚</button>
+  <span id="seekT">0:00</span><input type="range" id="seekR" min="0" max="1000" value="0" aria-label="再生位置"><span id="seekD">0:00</span>
+  <div id="chapters"></div>
 </div>
 
 <button id="gear" aria-label="設定を開く">
@@ -461,7 +473,28 @@ function syncTo(v,now,sl){   // 土台との再生位置のずれを0.1秒以内
 }
 window.__camDebug=()=>({entry:currentEntry&&currentEntry.label,baseT:+(video.currentTime||0).toFixed(2),baseRS:video.readyState,lon:+st.lon.toFixed(1),
   cur:multi&&multi.cur,pending:multi&&multi.pending,spd:multi&&Math.round(multi.spd||0),lastSec:multi&&multi.lastSec,lat:window.__loadLat&&+window.__loadLat.toFixed(2),bwMbps:window.__bw&&+(window.__bw*8/1e6).toFixed(1),slots:multi&&multi.slots.map(s=>({lon:s.lon,t:+(s.v.currentTime||0).toFixed(2),rs:s.v.readyState,p:s.v.paused,rate:s.v.playbackRate,T:s.T,armed:!!s.armed,started:!!s.started,lead:s.lead,rtt:window.__rtt})),err:lastErr,badge:$('hqBadge').textContent});
-setInterval(()=>{if(multi)multi.slots.forEach(sl=>slotArmCheck(sl,performance.now()));},20);   // 画面の描きかえとは別に、待ち合わせを細かく確認
+setInterval(()=>{if(multi)multi.slots.forEach(sl=>slotArmCheck(sl,performance.now()));},20);
+/* ---------- 試合まるごと用：シークバー（画面をタップすると出る） ---------- */
+const fmtT=x=>{x=Math.max(0,Math.floor(x||0));const h=Math.floor(x/3600),m=Math.floor(x%3600/60),sec=x%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(sec).padStart(2,'0');};
+const isLong=()=>isFinite(video.duration)&&video.duration>120;
+let seekHideAt=0,seekDrag=false;
+function showSeek(ms){if(!isLong())return;$('seek').classList.add('on');seekHideAt=performance.now()+(ms||4000);}
+function buildChapters(){const box=$('chapters');box.innerHTML='';const ch=(currentEntry&&currentEntry.chapters)||CONFIG.chapters||[];
+  ch.forEach(c=>{const b=document.createElement('button');b.textContent=c.label;b.onclick=()=>{video.currentTime=c.t;showSeek();};box.appendChild(b);});}
+setInterval(()=>{if(!isLong()){$('seek').classList.remove('on');return;}
+  const d=video.duration,t=video.currentTime||0;
+  if(!seekDrag){$('seekR').value=Math.round(t/d*1000);$('seekT').textContent=fmtT(t);}
+  $('seekD').textContent=fmtT(d);$('spBtn').textContent=video.paused?'▶':'❚❚';
+  if(!seekDrag&&performance.now()>seekHideAt)$('seek').classList.remove('on');},250);
+$('seekR').addEventListener('input',()=>{seekDrag=true;showSeek(6000);$('seekT').textContent=fmtT($('seekR').value/1000*video.duration);});
+$('seekR').addEventListener('change',()=>{video.currentTime=$('seekR').value/1000*video.duration;seekDrag=false;showSeek();});
+$('spBtn').onclick=()=>{$('playPause').click();showSeek();};
+{let td=null;stage.addEventListener('pointerdown',e=>{td={x:e.clientX,y:e.clientY,t:performance.now()};});
+ stage.addEventListener('pointerup',e=>{if(td&&Math.hypot(e.clientX-td.x,e.clientY-td.y)<10&&performance.now()-td.t<350){if($('seek').classList.contains('on'))seekHideAt=0;else showSeek();}td=null;});}
+video.addEventListener('loadedmetadata',()=>{buildChapters();if(isLong()){video.loop=false;showSeek(5000);}});
+video.addEventListener('seeking',()=>{   // 再生位置を飛ばしたら、高画質はいったん外して、着いた位置で待ち合わせし直す
+  if(!multi)return;multi.slots.forEach(slotStop);multi.cur=-1;multi.pending=null;multi.fade=null;
+  $('hqBadge').textContent='高画質エリア：読み込み中';});   // 画面の描きかえとは別に、待ち合わせを細かく確認
 function multiTick(now){
   if(!multi||!multi.cfg.tiles||!multi.cfg.tiles.length)return;
   const L=((st.lon%360)+360)%360;
