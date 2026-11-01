@@ -396,7 +396,8 @@ function teardownMulti(){
 }
 function slotLoad(s){   // 土台の今の再生位置から高画質版を読み込む
   if(s.h){s.h.destroy();s.h=null;}s.v.playbackRate=1;s.bad=0;s.loadedAt=performance.now();
-  if(window.Hls&&Hls.isSupported()){s.h=new Hls({maxBufferLength:8,maxMaxBufferLength:16,startPosition:Math.max(0,(video.currentTime||0)+0.3)});s.h.loadSource(s.url);s.h.attachMedia(s.v);}
+  const ahead=Math.min(2,Math.max(0.2,(window.__loadLat||0.6)));   // 読み込みにかかる時間ぶん先から始める（実測で更新）
+  if(window.Hls&&Hls.isSupported()){s.h=new Hls({maxBufferLength:6,maxMaxBufferLength:12,startPosition:Math.max(0,((video.currentTime||0)+ahead)%(video.duration||1e9))});s.h.loadSource(s.url);s.h.attachMedia(s.v);}
   else{s.v.src=s.url;}
   s.v.play().catch(()=>{});
 }
@@ -404,7 +405,7 @@ function requestTile(t){
   const idx=multi.cur===0?1:0,s=multi.slots[idx];
   slotStop(s);multi.pending=t.lon;s.lon=t.lon;s.url=t.hls;slotLoad(s);
   s.v.onloadedmetadata=()=>{if(!s.h){try{s.v.currentTime=Math.min((video.currentTime||0)+0.15,(s.v.duration||1)-0.1);}catch(e){}}s.v.play().catch(()=>{});};
-  s.v.onplaying=()=>{s.ready=true;};   // 再生が始まったら、ずれが0.1秒以内になるのを待って切り替える（multiTick側）
+  s.v.onplaying=()=>{if(!s.ready&&s.loadedAt){const lat=(performance.now()-s.loadedAt)/1000;window.__loadLat=window.__loadLat?window.__loadLat*0.6+lat*0.4:lat;}s.ready=true;};   // 再生が始まったら、ずれが0.1秒以内になるのを待って切り替える（multiTick側）
 }
 function activateTile(idx){
   const s=multi.slots[idx];multi.pending=null;
@@ -412,7 +413,8 @@ function activateTile(idx){
   s.mat.opacity=0;s.mesh.visible=true;s.mesh.renderOrder=2;multi.slots[1-idx].mesh.renderOrder=1;
   multi.fade={idx,old:multi.cur,start:performance.now()};
   multi.cur=idx;
-  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||s.lon+'°')+(multi.cfg.orient?(multi.cfg.orient==='portrait'?'（縦用）':'（横用）'):'');
+  const sec=multi.reqAt?((performance.now()-multi.reqAt)/1000).toFixed(1):null;multi.lastSec=sec;
+  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||s.lon+'°')+(multi.cfg.orient?(multi.cfg.orient==='portrait'?'（縦用）':'（横用）'):'')+(sec?' '+sec+'秒':'');
 }
 function syncTo(v,now){   // 土台との再生位置のずれを0.1秒以内に保つ（速度を少し変えてなめらかに追いつかせる）
   if(video.paused&&!v.paused)v.pause();else if(!video.paused&&v.paused)v.play().catch(()=>{});
@@ -420,20 +422,34 @@ function syncTo(v,now){   // 土台との再生位置のずれを0.1秒以内に
   const dur=video.duration||999;let diff=(video.currentTime||0)-(v.currentTime||0);
   if(diff>dur/2)diff-=dur;if(diff<-dur/2)diff+=dur;
   if(Math.abs(diff)>0.3){if(now-(v._lastSeek||0)>1500){v._lastSeek=now;try{v.currentTime=video.currentTime+0.05;}catch(e){}}v.playbackRate=1;}
-  else if(Math.abs(diff)>0.03){v.playbackRate=Math.max(0.85,Math.min(1.15,1+diff*1.2));}
+  else if(Math.abs(diff)>0.03){v.playbackRate=Math.max(0.75,Math.min(1.25,1+diff*1.5));}
   else v.playbackRate=1;
   return Math.abs(diff);
 }
 window.__camDebug=()=>({entry:currentEntry&&currentEntry.label,baseT:+(video.currentTime||0).toFixed(2),baseRS:video.readyState,lon:+st.lon.toFixed(1),
-  cur:multi&&multi.cur,pending:multi&&multi.pending,slots:multi&&multi.slots.map(s=>({lon:s.lon,t:+(s.v.currentTime||0).toFixed(2),rs:s.v.readyState,p:s.v.paused,rate:s.v.playbackRate})),err:lastErr,badge:$('hqBadge').textContent});
+  cur:multi&&multi.cur,pending:multi&&multi.pending,spd:multi&&Math.round(multi.spd||0),lastSec:multi&&multi.lastSec,lat:window.__loadLat&&+window.__loadLat.toFixed(2),slots:multi&&multi.slots.map(s=>({lon:s.lon,t:+(s.v.currentTime||0).toFixed(2),rs:s.v.readyState,p:s.v.paused,rate:s.v.playbackRate})),err:lastErr,badge:$('hqBadge').textContent});
 function multiTick(now){
   if(!multi||!multi.cfg.tiles||!multi.cfg.tiles.length)return;
   const L=((st.lon%360)+360)%360;
   let best=multi.cfg.tiles[0];multi.cfg.tiles.forEach(t=>{if(angDist(L,t.lon)<angDist(L,best.lon))best=t;});
   const curLon=multi.cur>=0?multi.slots[multi.cur].lon:null;
-  if(multi.pending===null&&!multi.fade){
-    if(curLon===null){if(video.readyState>=2)requestTile(best);}
-    else if(best.lon!==curLon&&angDist(L,curLon)>360/multi.cfg.tiles.length/2+5)requestTile(best);
+  // 回している間は読み込まない。止まった（止まりそうな）方向だけ読み込む
+  const dt=Math.max(1,now-(multi.lastNow||now));multi.lastNow=now;
+  const spd=angDist(st.lon,multi.lastLon==null?st.lon:multi.lastLon)/dt*1000;multi.lastLon=st.lon;   // 度/秒
+  multi.spd=multi.spd==null?spd:multi.spd*0.7+spd*0.3;
+  const touching=(typeof tLast!=='undefined'&&tLast)||pointers.size>0||jx||jy;
+  const settleLon=((st.tLon+(st.vLon||0)/0.07)%360+360)%360;          // 惰性で止まる予定の向き
+  let target=best;multi.cfg.tiles.forEach(t=>{if(angDist(settleLon,t.lon)<angDist(settleLon,target.lon))target=t;});
+  const slow=multi.spd<25&&!touching;
+  if(!slow)multi.stillSince=null;else if(multi.stillSince==null)multi.stillSince=now;
+  const settled=slow&&now-multi.stillSince>120;
+  const coasting=!touching&&multi.spd<120&&Math.abs(st.vLon||0)>0.01;  // 指を離して減速中→止まる方向を先読み
+  // 準備中の方向がもう狙いと違えば取りやめ
+  if(multi.pending!==null&&multi.pending!==target.lon&&(touching||!slow)&&!multi.fade){
+    const pi=multi.slots.findIndex(x=>x.lon===multi.pending);if(pi>=0&&pi!==multi.cur)slotStop(multi.slots[pi]);multi.pending=null;}
+  if(multi.pending===null&&!multi.fade&&(settled||coasting||curLon===null)){
+    const need=curLon===null||(target.lon!==curLon&&angDist(settled?L:settleLon,curLon)>360/multi.cfg.tiles.length/2+5);
+    if(need&&video.readyState>=2){multi.reqAt=now;requestTile(target);}
   }
   if(now-multi.lastSync>150){multi.lastSync=now;
     multi.slots.forEach((s,i)=>{if(s.lon===null)return;const d=syncTo(s.v,now);
