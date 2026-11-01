@@ -402,6 +402,8 @@ function setupMulti(cfgM){
   multi={cfg,slots:window.__slots,cur:-1,pending:null,lastSync:0,fade:null};
   multi.slots.forEach(slotStop);
   $('hqBadge').hidden=false;$('hqBadge').textContent='高画質エリア：読み込み中';
+  // 各方向の一覧（再生リスト）を先に少しずつ取っておく（試合まるごとは一覧が大きいので、向きを変えたときの待ちを減らす）
+  const urls=(cfg.tiles||[]).map(t=>t.hls);let k=0;const next=()=>{if(k>=urls.length||!multi)return;fetch(urls[k++]).catch(()=>{}).finally(()=>setTimeout(next,300));};setTimeout(next,4000);
 }
 function teardownMulti(){
   if(!multi)return;
