@@ -426,7 +426,9 @@ function slotArmCheck(s,now){   // 細かく確認：待ち合わせ時刻に合
       const lat=(now-s.loadedAt)/1000;window.__loadLat=window.__loadLat?window.__loadLat*0.6+lat*0.4:lat;}}
   const d=relT(s.T);
   if(s.armed&&!v.seeking){
-    if(d<=0.02&&d>-0.5&&!video.paused){try{v.currentTime=s.T-d;}catch(e){}v.play().catch(()=>{});s.started=true;s.ready=true;window.__missAdd=Math.max(0,(window.__missAdd||0)-0.1);return;}
+    if(d<=0.02&&d>-0.5&&!video.paused){try{v.currentTime=s.T-d;}catch(e){}v.play().catch(()=>{});s.started=true;s.ready=true;window.__missAdd=Math.max(0,(window.__missAdd||0)-0.1);
+      if(multi&&multi.pending===s.lon&&!multi.fade){const i=multi.slots.indexOf(s);if(i>=0&&i!==multi.cur)activateTile(i);}   // 同時に始めたのでその場で切り替え
+      return;}
   }
   if(d<-0.5){window.__missAdd=Math.min(3,(window.__missAdd||0)+0.3);slotLoad(s);}   // 間に合わなかった→少し余裕を足してやり直し（成功すると戻る）
 }
