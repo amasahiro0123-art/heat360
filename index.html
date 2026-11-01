@@ -392,7 +392,7 @@ function fsUpdate(){$('fsIco').setAttribute('d',fsEl()?'M9 4v5H4M15 4v5h5M9 20v-
    if(req&&(document.fullscreenEnabled||document.webkitFullscreenEnabled)){try{const r=req.call(de,{navigationUI:'hide'});if(r&&r.catch)r.catch(()=>showA2HS(true));}catch(e){showA2HS(true);}}
    else showA2HS(true);};
  document.addEventListener('fullscreenchange',fsUpdate);document.addEventListener('webkitfullscreenchange',fsUpdate);}
-function showA2HS(force){const b=$('a2hs');b.hidden=false;$('a2hsX').onclick=()=>{b.hidden=true;if(!force){try{localStorage.setItem('cam360a2hs','9');}catch(e){}}};clearTimeout(window.__a2t);window.__a2t=setTimeout(()=>{b.hidden=true;},15000);}
+function showA2HS(force){const ios=/iPhone|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);if(!ios){toast('この端末では全画面にできませんでした');return;}const b=$('a2hs');b.hidden=false;$('a2hsX').onclick=()=>{b.hidden=true;if(!force){try{localStorage.setItem('cam360a2hs','9');}catch(e){}}};clearTimeout(window.__a2t);window.__a2t=setTimeout(()=>{b.hidden=true;},15000);}
 function maybeA2HS(){try{const ios=/iPhone|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
   const standalone=navigator.standalone||matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches;
   if(!ios||standalone)return;let n=0;try{n=+(localStorage.getItem('cam360a2hs')||0);}catch(e){}if(n>=3)return;
