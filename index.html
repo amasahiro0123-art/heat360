@@ -405,11 +405,12 @@ function slotLoad(s){   // 「待ち合わせ」方式：読み込みにかか�
   if(s.h){s.h.destroy();s.h=null;}s.v.pause();s.v.playbackRate=1;s.bad=0;s.loadedAt=performance.now();s.armed=false;s.started=false;s.ready=false;
   const seg=s.segBytes||1.4e6, bw=window.__bw||5e5;
   const need=(seg/bw)*(s.dlMul||1.3)+0.35;          // 1区切り分を取るのにかかりそうな秒数（余裕込み）
-  const D=baseDur();let T=Math.ceil((video.currentTime||0)+Math.min(8,need));
-  if(D<1e8&&T>=Math.floor(D))T=0;                   // 最後をまたぐときは先頭で待ち合わせ
+  const D=baseDur(),off=window.__segOff||0.1;      // 区切りの位置（実測：各区切りは約0.1秒ずれて始まる）
+  let T=Math.ceil((video.currentTime||0)+Math.min(8,need)-off)+off;
+  if(D<1e8&&T>=D-0.5)T=off;                         // 最後をまたぐときは先頭で待ち合わせ
   s.T=T;
   if(window.Hls&&Hls.isSupported()){
-    s.h=new Hls({maxBufferLength:4,maxMaxBufferLength:8,startPosition:T,autoStartLoad:true});
+    s.h=new Hls({maxBufferLength:4,maxMaxBufferLength:8,startPosition:T+0.05,autoStartLoad:true});
     s.h.on(Hls.Events.FRAG_LOADED,(e,d)=>{noteFrag(d);try{if(d.frag&&d.frag.stats&&d.frag.stats.loaded>2e5)s.segBytes=s.segBytes?s.segBytes*0.5+d.frag.stats.loaded*0.5:d.frag.stats.loaded;}catch(_){}});
     s.h.loadSource(s.url);s.h.attachMedia(s.v);
   }else{s.v.src=s.url;s.v.addEventListener('loadedmetadata',()=>{try{s.v.currentTime=T;}catch(e){}},{once:true});}
@@ -417,14 +418,15 @@ function slotLoad(s){   // 「待ち合わせ」方式：読み込みにかか�
 function slotArmCheck(s,now){   // 毎フレーム：待ち合わせ時刻に合わせて再生開始
   if(s.lon===null||s.started)return;
   const v=s.v;
-  if(!s.armed){const b=v.buffered;let ok=false;for(let i=0;i<b.length;i++){if(b.start(i)<=s.T+0.05&&b.end(i)>=s.T+0.5)ok=true;}
+  if(!s.armed){const b=v.buffered;let ok=false;for(let i=0;i<b.length;i++){if(b.start(i)<=s.T+0.05&&b.end(i)>=s.T+0.6)ok=true;}
+    if(b.length&&window.__segOff==null){const f=b.start(0)-Math.floor(b.start(0));if(f<0.5)window.__segOff=f;}
     if(ok&&v.readyState>=2){if(Math.abs(v.currentTime-s.T)>0.05){try{v.currentTime=s.T;}catch(e){}}s.armed=true;s.armedAt=now;
       const lat=(now-s.loadedAt)/1000;window.__loadLat=window.__loadLat?window.__loadLat*0.6+lat*0.4:lat;}}
   const d=relT(s.T);
   if(s.armed&&!v.seeking){
-    if(d<=0.02&&d>-0.25&&!video.paused){try{v.currentTime=s.T-d;}catch(e){}v.play().catch(()=>{});s.started=true;s.ready=true;s.dlMul=Math.max(1.1,(s.dlMul||1.3)*0.95);return;}
+    if(d<=0.02&&d>-0.5&&!video.paused){try{v.currentTime=s.T-d;}catch(e){}v.play().catch(()=>{});s.started=true;s.ready=true;s.dlMul=Math.max(1.1,(s.dlMul||1.3)*0.95);return;}
   }
-  if(d<-0.25){s.dlMul=Math.min(4,(s.dlMul||1.3)*1.6);slotLoad(s);}   // 間に合わなかった→余裕を増やしてやり直し
+  if(d<-0.5){s.dlMul=Math.min(4,(s.dlMul||1.3)*1.6);slotLoad(s);}   // 間に合わなかった→余裕を増やしてやり直し
 }
 function requestTile(t){
   const idx=multi.cur===0?1:0,s=multi.slots[idx];
@@ -452,6 +454,7 @@ function syncTo(v,now,sl){   // 土台との再生位置のずれを0.1秒以内
 }
 window.__camDebug=()=>({entry:currentEntry&&currentEntry.label,baseT:+(video.currentTime||0).toFixed(2),baseRS:video.readyState,lon:+st.lon.toFixed(1),
   cur:multi&&multi.cur,pending:multi&&multi.pending,spd:multi&&Math.round(multi.spd||0),lastSec:multi&&multi.lastSec,lat:window.__loadLat&&+window.__loadLat.toFixed(2),bwMbps:window.__bw&&+(window.__bw*8/1e6).toFixed(1),slots:multi&&multi.slots.map(s=>({lon:s.lon,t:+(s.v.currentTime||0).toFixed(2),rs:s.v.readyState,p:s.v.paused,rate:s.v.playbackRate,T:s.T,armed:!!s.armed,started:!!s.started,mul:s.dlMul})),err:lastErr,badge:$('hqBadge').textContent});
+setInterval(()=>{if(multi)multi.slots.forEach(sl=>slotArmCheck(sl,performance.now()));},20);   // 画面の描きかえとは別に、待ち合わせを細かく確認
 function multiTick(now){
   if(!multi||!multi.cfg.tiles||!multi.cfg.tiles.length)return;
   const L=((st.lon%360)+360)%360;
