@@ -29,6 +29,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:
 .live i{width:8px;height:8px;border-radius:50%;background:var(--live);animation:blink 1.2s steps(2,start) infinite}
 @keyframes blink{to{visibility:hidden}}
 .dim{color:var(--dim)}
+#hqBadge{color:#ffd166}
 .val{color:var(--fg)}
 .sample{color:#f5c26b}
 /* 画面中央のレティクル */
@@ -119,6 +120,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
   <span class="live" id="liveBadge"><i></i>LIVE</span>
   <span id="camName">CAM-01 ・ 360°</span>
   <span class="sample" id="srcLabel" hidden>サンプル映像</span>
+  <span id="hqBadge" hidden></span>
 </div>
 <div class="hud tr">
   <span id="clock" class="val">--:--:--</span>
@@ -183,6 +185,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 </section>
 
 <script src="videos.js"></script>
+<script src="videos_multi.js"></script>
 <script src="config.js"></script>
 <script src="hls.min.js"></script>
 <script src="three.min.js"></script>
@@ -286,7 +289,7 @@ function drawSample(t){
   lctx.fillStyle='#fff';lctx.beginPath();lctx.ellipse(b[0],b[1],r*1.3,r,0,0,7);lctx.fill();
 }
 const sampleTex=new THREE.CanvasTexture(live);sampleTex.encoding=THREE.sRGBEncoding;
-const REMOTE=!!((window.CAM360_CONFIG||{}).video||((window.CAM360_CONFIG||{}).videos||[]).length||(window.CAM360_VIDEOS||[]).length);
+const REMOTE=!!((window.CAM360_CONFIG||{}).video||((window.CAM360_CONFIG||{}).videos||[]).length||(window.CAM360_VIDEOS||[]).length||(/[?&]multi=/.test(location.search)&&(window.CAM360_VIDEOS_MULTI||[]).length));
 let usingSample=!REMOTE;
 if(REMOTE){mat.map=null;mat.color.set(0x000000);}else{mat.map=sampleTex;$('connecting').hidden=true;$('srcLabel').hidden=false;}
 
@@ -353,6 +356,70 @@ function maybeCloseSplash(){
 }
 function hideSplash(){videoReady=true;maybeCloseSplash();}
 runSplash();
+/* ---------- 4方向切り替え（低画質の全周を土台に、見ている方向の高画質180°を重ねる） ---------- */
+let multi=null,hqMesh=null,hqMat=null;
+const MULTI_NAMES={180:'正面',270:'右',0:'後ろ',90:'左'};
+function angDist(a,b){let d=((a-b)%360+540)%360-180;return Math.abs(d);}
+function edgeAlphaTex(){const c=document.createElement('canvas');c.width=256;c.height=128;const x=c.getContext('2d');
+  const gh=x.createLinearGradient(0,0,256,0);gh.addColorStop(0,'#000');gh.addColorStop(.06,'#fff');gh.addColorStop(.94,'#fff');gh.addColorStop(1,'#000');
+  x.fillStyle=gh;x.fillRect(0,0,256,128);x.globalCompositeOperation='multiply';
+  const gv=x.createLinearGradient(0,0,0,128);gv.addColorStop(0,'#000');gv.addColorStop(.08,'#fff');gv.addColorStop(.92,'#fff');gv.addColorStop(1,'#000');
+  x.fillStyle=gv;x.fillRect(0,0,256,128);const t=new THREE.CanvasTexture(c);return t;}
+function sphereAt(lonC,h,v,r){const H=THREE.MathUtils.degToRad(h),V=THREE.MathUtils.degToRad(v);
+  const g=new THREE.SphereGeometry(r,64,32,THREE.MathUtils.degToRad(lonC)-H/2,H,Math.PI/2-V/2,V);g.scale(-1,1,1);return g;}
+function newHqVideo(){const v=document.createElement('video');v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.crossOrigin='anonymous';v.loop=true;v.preload='auto';return v;}
+function setupMulti(cfgM){
+  teardownMulti();
+  if(!hqMat){hqMat=new THREE.MeshBasicMaterial({transparent:true,alphaMap:edgeAlphaTex(),depthWrite:false});
+    hqMesh=new THREE.Mesh(sphereAt(180,cfgM.hfov||180,cfgM.vfov||90,480),hqMat);hqMesh.renderOrder=1;scene.add(hqMesh);}
+  hqMesh.visible=false;
+  multi={cfg:cfgM,slots:[{v:newHqVideo(),h:null,tex:null,lon:null},{v:newHqVideo(),h:null,tex:null,lon:null}],cur:-1,pending:null,lastSync:0};
+  $('hqBadge').hidden=false;$('hqBadge').textContent='高画質エリア：読み込み中';
+}
+function teardownMulti(){
+  if(!multi)return;
+  multi.slots.forEach(s=>{if(s.h)s.h.destroy();s.v.pause();s.v.removeAttribute('src');s.v.load();if(s.tex)s.tex.dispose();});
+  multi=null;if(hqMesh)hqMesh.visible=false;$('hqBadge').hidden=true;
+}
+function requestTile(t){
+  if(multi.pending===t.lon)return;
+  const idx=multi.cur===0?1:0,s=multi.slots[idx];
+  multi.pending=t.lon;
+  if(s.h){s.h.destroy();s.h=null;}
+  s.lon=t.lon;s.v.onloadedmetadata=null;s.v.onplaying=null;
+  if(window.Hls&&Hls.isSupported()){s.h=new Hls({maxBufferLength:8,maxMaxBufferLength:16,startPosition:Math.max(0,video.currentTime||0)});s.h.loadSource(t.hls);s.h.attachMedia(s.v);}
+  else{s.v.src=t.hls;}
+  s.v.onloadedmetadata=()=>{try{s.v.currentTime=Math.min((video.currentTime||0)+0.15,(s.v.duration||1)-0.1);}catch(e){}
+    s.v.play().catch(()=>{});};
+  s.v.onplaying=()=>{
+    const go=()=>activateTile(idx,t.lon);
+    if(s.v.requestVideoFrameCallback)s.v.requestVideoFrameCallback(()=>go());else setTimeout(go,120);
+  };
+}
+function activateTile(idx,lon){
+  if(!multi||multi.pending!==lon||multi.slots[idx].lon!==lon)return;
+  const s=multi.slots[idx];multi.pending=null;
+  if(!s.tex){s.tex=new THREE.VideoTexture(s.v);s.tex.encoding=THREE.sRGBEncoding;s.tex.minFilter=THREE.LinearFilter;s.tex.magFilter=THREE.LinearFilter;s.tex.generateMipmaps=false;}
+  hqMat.map=s.tex;hqMat.needsUpdate=true;
+  hqMesh.geometry.dispose();hqMesh.geometry=sphereAt(lon,multi.cfg.hfov||180,multi.cfg.vfov||90,480);hqMesh.visible=true;
+  const old=multi.cur;multi.cur=idx;
+  if(old>=0&&old!==idx){const o=multi.slots[old];if(o.h){o.h.destroy();o.h=null;}o.v.pause();o.lon=null;}
+  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[lon]||lon+'°');
+}
+function multiTick(now){
+  if(!multi||!multi.cfg.tiles||!multi.cfg.tiles.length)return;
+  const L=((st.lon%360)+360)%360;
+  let best=multi.cfg.tiles[0];multi.cfg.tiles.forEach(t=>{if(angDist(L,t.lon)<angDist(L,best.lon))best=t;});
+  const curLon=multi.cur>=0?multi.slots[multi.cur].lon:null;
+  if(curLon===null){if(multi.pending===null&&video.readyState>=2)requestTile(best);}
+  else if(best.lon!==curLon&&angDist(L,curLon)>50)requestTile(best);   // 余裕をもって切り替える
+  // 高画質版を土台の再生位置に合わせる
+  if(multi.cur>=0&&now-multi.lastSync>500){multi.lastSync=now;const v=multi.slots[multi.cur].v;
+    if(video.paused&&!v.paused)v.pause();else if(!video.paused&&v.paused)v.play().catch(()=>{});
+    const d=Math.abs((v.currentTime||0)-(video.currentTime||0));
+    if(d>0.25&&d<(video.duration||999)-1&&!v.seeking&&v.readyState>=2){try{v.currentTime=video.currentTime+0.05;}catch(e){}}}
+}
+
 /* ---------- 画質（5.7K / 4K）の切り替え ---------- */
 let hls=null,currentEntry=null;
 const gl=renderer.getContext();
@@ -377,7 +444,9 @@ function updateQualityUI(){const b=$('qualityBtn');if(!b)return;
 
 function attachVideo(src,remote,entry){
   syncOn=false;currentEntry=entry||null;
-  setRange(entry&&entry.hfov,entry&&entry.vfov);
+  if(entry&&entry.multi&&!entry.hls)entry.hls=entry.multi.base;
+  setRange(entry&&!entry.multi&&entry.hfov,entry&&!entry.multi&&entry.vfov);
+  if(entry&&entry.multi)setupMulti(entry.multi);else teardownMulti();
   if(hls){hls.destroy();hls=null;}
   const useHls=entry&&entry.hls&&window.Hls&&Hls.isSupported();
   if(useHls){
@@ -420,12 +489,13 @@ setInterval(()=>{
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;tryPlay();}});
 
 if(Array.isArray(window.CAM360_VIDEOS)&&window.CAM360_VIDEOS.length)CONFIG.videos=window.CAM360_VIDEOS;
+if(qp.get('multi')&&Array.isArray(window.CAM360_VIDEOS_MULTI)&&window.CAM360_VIDEOS_MULTI.length)CONFIG.videos=window.CAM360_VIDEOS_MULTI;
 if(Array.isArray(CONFIG.videos)&&CONFIG.videos.length){
   let first=CONFIG.videos[0];if(qp.get('v'))first=CONFIG.videos.find(c=>c.file===qp.get('v')||c.label===qp.get('v'))||{file:qp.get('v')};
-  CONFIG.video=first.file||first.hls;CONFIG.entry=first;
+  CONFIG.video=first.file||first.hls||(first.multi&&first.multi.base);CONFIG.entry=first;
   $('clipBox').hidden=false;
   CONFIG.videos.forEach(c=>{const b=document.createElement('button');b.textContent=c.label||c.file||c.hls;
-    b.onclick=()=>{CONFIG.video=c.file||c.hls;CONFIG.entry=c;attachVideo(c.file||c.hls,true,c);toast(b.textContent+' に切り替えました');closeSheet();};
+    b.onclick=()=>{CONFIG.video=c.file||c.hls||(c.multi&&c.multi.base);CONFIG.entry=c;attachVideo(c.file||c.hls,true,c);toast(b.textContent+' に切り替えました');closeSheet();};
     $('clipList').appendChild(b);});
 }
 if(CONFIG.video)attachVideo(CONFIG.video,true,CONFIG.entry);
@@ -555,6 +625,7 @@ function frame(now){
   const phi=THREE.MathUtils.degToRad(90-st.lat),th=THREE.MathUtils.degToRad(st.lon);
   target.set(500*Math.sin(phi)*Math.cos(th),500*Math.cos(phi),500*Math.sin(phi)*Math.sin(th));
   camera.lookAt(target);
+  multiTick(now);
   if(usingSample){sampleT+=dt;drawSample(sampleT);sampleTex.needsUpdate=true;}
   renderer.render(scene,camera);
   let pan=((st.lon-st.front)%360+540)%360-180;
