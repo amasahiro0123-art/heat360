@@ -421,7 +421,9 @@ function slotLoad(s){   // 「待ち合わせ」方式：回線速度から見�
 function slotArmCheck(s,now){   // 細かく確認：待ち合わせ時刻に合わせて再生開始
   if(s.lon===null||s.started)return;
   const v=s.v;
-  if(!s.armed){const b=v.buffered;let ok=false;for(let i=0;i<b.length;i++){if(b.start(i)<=s.T+0.02&&b.end(i)>=s.T+0.2)ok=true;}
+  if(!s.armed){const b=v.buffered;let ok=false;for(let i=0;i<b.length;i++){const st0=b.start(i),en=b.end(i);
+      if(st0>s.T+0.02&&st0<=s.T+1.05&&en>=st0+0.2&&relT(st0)>0.05){s.T=st0;}   // 読めた区切りが少し後ろから始まっていたら、待ち合わせをそこへずらす
+      if(b.start(i)<=s.T+0.02&&b.end(i)>=s.T+0.2)ok=true;}
     if(b.length&&window.__segOff==null){const f=b.start(0)-Math.floor(b.start(0));if(f<0.5)window.__segOff=f;}
     if(ok&&v.readyState>=2){if(Math.abs(v.currentTime-s.T)>0.05){try{v.currentTime=s.T;}catch(e){}}s.armed=true;s.armedAt=now;
       const lat=(now-s.loadedAt)/1000;window.__loadLat=window.__loadLat?window.__loadLat*0.6+lat*0.4:lat;}}
