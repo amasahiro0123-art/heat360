@@ -10,14 +10,18 @@ window.CAM360_VIDEOS_MULTI = [
       { lon: 45, hls: 'hls/HL1_p/d45/index.m3u8' },
       { lon: 90, hls: 'hls/HL1_p/d90/index.m3u8' },
       { lon: 135, hls: 'hls/HL1_p/d135/index.m3u8' } ] },
-    landscape: { hfov: 180, vfov: 100, tiles: [
+    landscape: { hfov: 140, vfov: 100, tiles: [
       { lon: 180, hls: 'hls/HL1_l/d180/index.m3u8' },
-      { lon: 225, hls: 'hls/HL1_l/d225/index.m3u8' },
+      { lon: 210, hls: 'hls/HL1_l/d210/index.m3u8' },
+      { lon: 240, hls: 'hls/HL1_l/d240/index.m3u8' },
       { lon: 270, hls: 'hls/HL1_l/d270/index.m3u8' },
-      { lon: 315, hls: 'hls/HL1_l/d315/index.m3u8' },
+      { lon: 300, hls: 'hls/HL1_l/d300/index.m3u8' },
+      { lon: 330, hls: 'hls/HL1_l/d330/index.m3u8' },
       { lon: 0, hls: 'hls/HL1_l/d0/index.m3u8' },
-      { lon: 45, hls: 'hls/HL1_l/d45/index.m3u8' },
+      { lon: 30, hls: 'hls/HL1_l/d30/index.m3u8' },
+      { lon: 60, hls: 'hls/HL1_l/d60/index.m3u8' },
       { lon: 90, hls: 'hls/HL1_l/d90/index.m3u8' },
-      { lon: 135, hls: 'hls/HL1_l/d135/index.m3u8' } ] },
+      { lon: 120, hls: 'hls/HL1_l/d120/index.m3u8' },
+      { lon: 150, hls: 'hls/HL1_l/d150/index.m3u8' } ] },
   } } },
 ];

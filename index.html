@@ -360,6 +360,7 @@ runSplash();
 setTimeout(()=>{if(!videoReady&&!$('connecting').hidden&&REMOTE)showLoadError();},25000);
 /* ---------- 方向切り替え（低画質の全周を土台に、見ている方向の高画質版を重ねる） ---------- */
 let multi=null,edgeTex=null;
+const dirName=l=>{const d=((l-180)%360+540)%360-180;return d===0?'正面':Math.abs(d)===180?'後ろ':(d>0?'右':'左')+Math.abs(d)+'°';};
 const MULTI_NAMES={180:'正面',225:'右前',270:'右',315:'右後ろ',0:'後ろ',45:'左後ろ',90:'左',135:'左前'};
 const SYNC_TOL=0.1;        // 土台とのずれの許容（秒）
 const FADE_MS=350;         // 高画質版の切り替えをなめらかにする時間
@@ -396,7 +397,7 @@ function teardownMulti(){
 }
 function slotLoad(s){   // 土台の今の再生位置から高画質版を読み込む
   if(s.h){s.h.destroy();s.h=null;}s.v.playbackRate=1;s.bad=0;s.loadedAt=performance.now();
-  const ahead=Math.min(2,Math.max(0.2,(window.__loadLat||0.6)));   // 読み込みにかかる時間ぶん先から始める（実測で更新）
+  const ahead=Math.min(4,Math.max(0.3,(window.__loadLat||0.8)*1.1));   // 読み込みにかかる時間ぶん先から始める（実測で更新）
   if(window.Hls&&Hls.isSupported()){s.h=new Hls({maxBufferLength:6,maxMaxBufferLength:12,startPosition:Math.max(0,((video.currentTime||0)+ahead)%(video.duration||1e9))});s.h.loadSource(s.url);s.h.attachMedia(s.v);}
   else{s.v.src=s.url;}
   s.v.play().catch(()=>{});
@@ -414,7 +415,7 @@ function activateTile(idx){
   multi.fade={idx,old:multi.cur,start:performance.now()};
   multi.cur=idx;
   const sec=multi.reqAt?((performance.now()-multi.reqAt)/1000).toFixed(1):null;multi.lastSec=sec;
-  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||s.lon+'°')+(multi.cfg.orient?(multi.cfg.orient==='portrait'?'（縦用）':'（横用）'):'')+(sec?' '+sec+'秒':'');
+  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||dirName(s.lon))+(multi.cfg.orient?(multi.cfg.orient==='portrait'?'（縦用）':'（横用）'):'')+(sec?' '+sec+'秒':'');
 }
 function syncTo(v,now){   // 土台との再生位置のずれを0.1秒以内に保つ（速度を少し変えてなめらかに追いつかせる）
   if(video.paused&&!v.paused)v.pause();else if(!video.paused&&v.paused)v.play().catch(()=>{});
