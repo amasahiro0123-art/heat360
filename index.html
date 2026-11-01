@@ -371,7 +371,7 @@ function edgeAlphaTex(){const c=document.createElement('canvas');c.width=256;c.h
   x.fillStyle=gv;x.fillRect(0,0,256,128);return new THREE.CanvasTexture(c);}
 function sphereAt(lonC,h,v,r){const H=THREE.MathUtils.degToRad(h),V=THREE.MathUtils.degToRad(v);
   const g=new THREE.SphereGeometry(r,64,32,THREE.MathUtils.degToRad(lonC)-H/2,H,Math.PI/2-V/2,V);g.scale(-1,1,1);return g;}
-function newHqVideo(){const v=document.createElement('video');v.disableRemotePlayback=true;v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.crossOrigin='anonymous';v.loop=true;v.preload='auto';return v;}
+function newHqVideo(){const v=document.createElement('video');v.disableRemotePlayback=true;v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.crossOrigin='anonymous';v.loop=false;v.preload='auto';return v;}
 function newSlot(i){
   if(!edgeTex)edgeTex=edgeAlphaTex();
   const v=newHqVideo();
@@ -394,11 +394,15 @@ function teardownMulti(){
   if(!multi)return;
   multi.slots.forEach(slotStop);multi=null;$('hqBadge').hidden=true;
 }
+function slotLoad(s){   // 土台の今の再生位置から高画質版を読み込む
+  if(s.h){s.h.destroy();s.h=null;}s.v.playbackRate=1;s.bad=0;s.loadedAt=performance.now();
+  if(window.Hls&&Hls.isSupported()){s.h=new Hls({maxBufferLength:8,maxMaxBufferLength:16,startPosition:Math.max(0,(video.currentTime||0)+0.3)});s.h.loadSource(s.url);s.h.attachMedia(s.v);}
+  else{s.v.src=s.url;}
+  s.v.play().catch(()=>{});
+}
 function requestTile(t){
   const idx=multi.cur===0?1:0,s=multi.slots[idx];
-  slotStop(s);multi.pending=t.lon;s.lon=t.lon;
-  if(window.Hls&&Hls.isSupported()){s.h=new Hls({maxBufferLength:8,maxMaxBufferLength:16,startPosition:Math.max(0,(video.currentTime||0)+0.3)});s.h.loadSource(t.hls);s.h.attachMedia(s.v);}
-  else{s.v.src=t.hls;}
+  slotStop(s);multi.pending=t.lon;s.lon=t.lon;s.url=t.hls;slotLoad(s);
   s.v.onloadedmetadata=()=>{if(!s.h){try{s.v.currentTime=Math.min((video.currentTime||0)+0.15,(s.v.duration||1)-0.1);}catch(e){}}s.v.play().catch(()=>{});};
   s.v.onplaying=()=>{s.ready=true;};   // 再生が始まったら、ずれが0.1秒以内になるのを待って切り替える（multiTick側）
 }
@@ -433,6 +437,9 @@ function multiTick(now){
   }
   if(now-multi.lastSync>150){multi.lastSync=now;
     multi.slots.forEach((s,i)=>{if(s.lon===null)return;const d=syncTo(s.v,now);
+      // 大きくずれたまま／止まったまま（映像の先頭に戻った時など）なら、土台の位置から読み直す
+      if(d>0.3||s.v.ended){s.bad=(s.bad||0)+150;}else s.bad=0;
+      if((s.v.ended&&now-(s.loadedAt||0)>1000)||(s.bad>3000&&now-(s.loadedAt||0)>6000)){slotLoad(s);}
       if(i!==multi.cur&&multi.pending===s.lon&&s.ready&&d<=SYNC_TOL)activateTile(i);});}
   if(multi.fade){const f=multi.fade,k=Math.min(1,(now-f.start)/FADE_MS);multi.slots[f.idx].mat.opacity=k;
     if(k>=1){if(f.old>=0&&f.old!==f.idx)slotStop(multi.slots[f.old]);multi.fade=null;}}
