@@ -196,9 +196,16 @@ renderer.outputEncoding=THREE.sRGBEncoding;
 stage.appendChild(renderer.domElement);
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(70,1,1,1100);
-const geo=new THREE.SphereGeometry(500,64,40); geo.scale(-1,1,1);
 const mat=new THREE.MeshBasicMaterial();
-scene.add(new THREE.Mesh(geo,mat));
+/* 映像の範囲（全周 or 正面だけ）に合わせて球の一部を作る。H=横の範囲、V=縦の範囲（度） */
+let RANGE={h:360,v:180},needCenter=false;
+function makeSphere(h,v){
+  const H=THREE.MathUtils.degToRad(h),V=THREE.MathUtils.degToRad(v);
+  const g=new THREE.SphereGeometry(500,96,48,Math.PI-H/2,H,Math.PI/2-V/2,V);g.scale(-1,1,1);return g;}
+const mesh=new THREE.Mesh(makeSphere(360,180),mat);scene.add(mesh);
+function setRange(h,v){h=h||360;v=v||180;if(RANGE.h===h&&RANGE.v===v)return;
+  RANGE={h,v};mesh.geometry.dispose();mesh.geometry=makeSphere(h,v);
+  if(h<360)needCenter=true;}
 
 /* ---------- サンプル映像（3D空間を正距円筒図法に正しく投影して描く） ---------- */
 const W=2048,H=1024;
@@ -365,10 +372,12 @@ function pickLevel(){
 }
 function updateQualityUI(){const b=$('qualityBtn');if(!b)return;
   b.textContent='画質：'+(quality==='high'?'高画質 5.7K':'標準 4K');
-  b.disabled=!(currentEntry&&currentEntry.hls&&hls);}
+  const multi=!!(hls&&hls.levels&&hls.levels.length>1);
+  b.disabled=!(currentEntry&&currentEntry.hls&&hls&&multi);b.hidden=!!(hls&&hls.levels&&hls.levels.length===1);}
 
 function attachVideo(src,remote,entry){
   syncOn=false;currentEntry=entry||null;
+  setRange(entry&&entry.hfov,entry&&entry.vfov);
   if(hls){hls.destroy();hls=null;}
   const useHls=entry&&entry.hls&&window.Hls&&Hls.isSupported();
   if(useHls){
@@ -531,6 +540,15 @@ function frame(now){
   if(zoomDir)st.tFov=clampFov(st.tFov+zoomDir*45*dt);
   if(pointers.size===0&&!tLast&&(st.vLon||st.vLat)){st.tLon+=st.vLon;st.tLat=clampLat(st.tLat+st.vLat);st.vLon*=.93;st.vLat*=.93;
     if(Math.abs(st.vLon)<.005&&Math.abs(st.vLat)<.005)st.vLon=st.vLat=0;}
+  if(needCenter){st.tLon=st.lon=180;st.tLat=st.lat=0;needCenter=false;}
+  if(RANGE.h<360||RANGE.v<180){              // 映像の外（黒い部分）が見えないように制限
+    st.tFov=Math.min(st.tFov,RANGE.v-2);
+    const halfV=st.tFov/2,halfH=THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(halfV))*camera.aspect));
+    if(RANGE.h<360){const lim=Math.max(0,RANGE.h/2-halfH*(1.08+Math.abs(st.tLat)/90)-3);   // 画面の四隅も範囲内に収める余裕
+      if(halfH*2>=RANGE.h-2){st.tFov=Math.max(FOV_MIN,2*THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad((RANGE.h-4)/2))/camera.aspect)));}
+      st.tLon=Math.max(180-lim,Math.min(180+lim,st.tLon));}
+    const limV=Math.max(0,RANGE.v/2-st.tFov/2*1.06-2);st.tLat=Math.max(-limV,Math.min(limV,st.tLat));
+  }
   const k=1-Math.pow(1-(0.45-cfg.lag*.4),dt*60);
   st.lon+=(st.tLon-st.lon)*k;st.lat+=(st.tLat-st.lat)*k;st.fov+=(st.tFov-st.fov)*k;
   camera.fov=st.fov;camera.updateProjectionMatrix();
