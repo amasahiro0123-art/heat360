@@ -164,6 +164,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
     </div>
   </div>
   <div class="sp-wait sp-step" id="spWait">CONNECTING…</div>
+  <div id="spDiag" style="font:10px/1.5 monospace;color:#778;margin-top:8px;max-width:90vw;word-break:break-all;white-space:pre-wrap;text-align:center"></div>
   <img class="sp-team sp-step" id="spTeam" alt="" hidden>
 </div>
 <div class="sp-copy sp-step" id="spCopy">YOUR VIEW, YOUR CAMERA</div>
@@ -371,6 +372,15 @@ function showLoadError(){$('start').hidden=true;const w=$('spWait');w.classList.
   w.innerHTML='映像を読み込めませんでした<div style="font-size:10px;letter-spacing:0;color:#889;margin-top:6px;font-family:monospace;white-space:normal;word-break:break-all;max-width:88vw;margin-left:auto;margin-right:auto">'+diag+'</div><button id="reloadBtn" style="margin-top:14px;font:inherit;font-size:14px;letter-spacing:.1em;padding:10px 18px;border-radius:999px;border:1px solid #9aa4a8;background:transparent;color:#fff;pointer-events:auto">再読み込み</button>';
   $('connecting').style.pointerEvents='auto';$('reloadBtn').onclick=()=>location.reload();}
 runSplash();
+/* 接続できないときの手がかり：6秒たってもつながらなければ、接続画面の下に状況を小さく出す */
+(function(){let probe=null;const t0=Date.now();
+  const tick=()=>{if(videoReady||$('connecting').hidden)return;
+    if(Date.now()-t0>6000){
+      if(!probe&&currentEntry&&currentEntry.hls){probe='…';const u=currentEntry.hls,ts=performance.now();
+        fetch(u,{cache:'no-store'}).then(r=>r.text().then(t=>{probe=r.status+' '+(r.headers.get('content-type')||'')+' '+t.length+'B '+Math.round(performance.now()-ts)+'ms '+(t.startsWith('#EXTM3U')?'ok':'NG:'+t.slice(0,40));})).catch(e=>{probe='ERR '+e.message;});}
+      const ua=navigator.userAgent;const br=/CriOS/.test(ua)?'ChromeiOS':/FxiOS/.test(ua)?'FirefoxiOS':/Safari/.test(ua)&&!/Chrome/.test(ua)?'Safari':'other';
+      $('spDiag').textContent=br+' mms'+(window.ManagedMediaSource?1:0)+' mse'+(window.MediaSource?1:0)+' hls'+(window.Hls&&Hls.isSupported()?1:0)+' rs'+video.readyState+' ns'+video.networkState+(video.error?' verr'+video.error.code:'')+'\nev '+JSON.stringify(window.__hev||{})+'\nerr '+(lastErr||'-')+'\nprobe '+(probe||'-');}
+    setTimeout(tick,1000);};setTimeout(tick,1000);})();
 setTimeout(()=>{if(!videoReady&&!$('connecting').hidden&&REMOTE)showLoadError();},25000);
 /* ---------- 方向切り替え（低画質の全周を土台に、見ている方向の高画質版を重ねる） ---------- */
 let multi=null,edgeTex=null;
@@ -590,7 +600,7 @@ function attachVideo(src,remote,entry){
   const useHls=entry&&entry.hls&&window.Hls&&Hls.isSupported();
   if(useHls){
     hls=new Hls({maxBufferLength:30,maxMaxBufferLength:60,capLevelToPlayerSize:false,startLevel:-1,startFragPrefetch:true});
-    hls.on(Hls.Events.MANIFEST_PARSED,()=>pickLevel());hls.on(Hls.Events.FRAG_LOADED,(e,d)=>noteFrag(d));
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>pickLevel());hls.on(Hls.Events.FRAG_LOADED,(e,d)=>noteFrag(d));window.__hlog=[];['MEDIA_ATTACHED','MANIFEST_LOADED','MANIFEST_PARSED','LEVEL_LOADED','FRAG_LOADED','FRAG_BUFFERED'].forEach(n=>hls.on(Hls.Events[n],()=>{window.__hev=window.__hev||{};window.__hev[n]=(window.__hev[n]||0)+1;}));
     hls.on(Hls.Events.ERROR,(ev,d)=>{
       lastErr=(d.type||'')+'/'+(d.details||'')+(d.response&&d.response.code?'/'+d.response.code:'');
       if(!d.fatal)return;
