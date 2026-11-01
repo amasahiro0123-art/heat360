@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Heater CAM</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Heater CAM">
+<meta name="theme-color" content="#000000">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;700&display=swap">
@@ -112,6 +119,8 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 #seekR{flex:1;min-width:120px;accent-color:var(--accent)}
 #chapters{display:flex;gap:6px;flex-wrap:wrap;width:100%}
 #chapters:empty{display:none}
+#a2hs{position:fixed;left:50%;top:calc(64px + env(safe-area-inset-top,0px));transform:translateX(-50%);max-width:min(92vw,520px);background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:12px;padding:10px 38px 10px 14px;font-size:13px;line-height:1.5;z-index:25}
+#a2hs button{position:absolute;right:6px;top:6px;padding:2px 8px;font-size:14px;border:0;background:transparent}
 #toast{position:fixed;left:50%;bottom:calc(160px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:8px 14px;border-radius:8px;font-size:13px;max-width:calc(100% - 32px);opacity:0;transition:opacity .25s;pointer-events:none;z-index:30}
 #toast.show{opacity:1}
 #start{position:fixed;inset:0;margin:auto;width:max-content;height:max-content;padding:16px 26px;font-size:16px;font-weight:700;background:var(--accent);color:#06201c;border:0;border-radius:999px;z-index:25}
@@ -145,6 +154,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
   <div id="chapters"></div>
 </div>
 
+<div id="a2hs" hidden>ブラウザの枠を消して<b>全画面</b>で見るには：下の共有ボタン <span style="font-size:15px">⬆︎</span> →「<b>ホーム画面に追加</b>」→ ホーム画面のアイコンから開いてください<button id="a2hsX" aria-label="閉じる">✕</button></div>
 <button id="gear" aria-label="設定を開く">
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
 </button>
@@ -363,10 +373,15 @@ function maybeCloseSplash(){
   if(!videoReady||!splashSeqDone||splashClosing)return;
   splashClosing=true;const c=$('connecting');c.classList.add('fade');            // 1秒でフェードアウト
   setTimeout(()=>{c.hidden=true;
-    if(!introShown){introShown=true;const i=$('intro');i.hidden=false;setTimeout(()=>i.classList.add('fade'),3000);setTimeout(()=>{i.hidden=true;},4000);}
+    setTimeout(maybeA2HS,4500);if(!introShown){introShown=true;const i=$('intro');i.hidden=false;setTimeout(()=>i.classList.add('fade'),3000);setTimeout(()=>{i.hidden=true;},4000);}
   },1000);
 }
 function hideSplash(){videoReady=true;maybeCloseSplash();}
+function maybeA2HS(){try{const ios=/iPhone|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
+  const standalone=navigator.standalone||matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches;
+  if(!ios||standalone)return;let n=0;try{n=+(localStorage.getItem('cam360a2hs')||0);}catch(e){}if(n>=3)return;
+  try{localStorage.setItem('cam360a2hs',String(n+1));}catch(e){}
+  const b=$('a2hs');b.hidden=false;$('a2hsX').onclick=()=>{b.hidden=true;try{localStorage.setItem('cam360a2hs','9');}catch(e){}};setTimeout(()=>{b.hidden=true;},12000);}catch(e){}}
 function showLoadError(){$('start').hidden=true;const w=$('spWait');w.classList.remove('blink');w.classList.add('on');
   const diag=(lastErr||'timeout')+' / rs'+video.readyState+' / mse'+(!!(window.MediaSource||window.ManagedMediaSource)?1:0)+' / hls'+(window.Hls&&Hls.isSupported()?1:0);
   w.innerHTML='映像を読み込めませんでした<div style="font-size:10px;letter-spacing:0;color:#889;margin-top:6px;font-family:monospace;white-space:normal;word-break:break-all;max-width:88vw;margin-left:auto;margin-right:auto">'+diag+'</div><button id="reloadBtn" style="margin-top:14px;font:inherit;font-size:14px;letter-spacing:.1em;padding:10px 18px;border-radius:999px;border:1px solid #9aa4a8;background:transparent;color:#fff;pointer-events:auto">再読み込み</button>';
@@ -489,7 +504,7 @@ window.__camDebug=()=>({entry:currentEntry&&currentEntry.label,baseT:+(video.cur
   cur:multi&&multi.cur,pending:multi&&multi.pending,spd:multi&&Math.round(multi.spd||0),lastSec:multi&&multi.lastSec,lat:window.__loadLat&&+window.__loadLat.toFixed(2),bwMbps:window.__bw&&+(window.__bw*8/1e6).toFixed(1),slots:multi&&multi.slots.map(s=>({lon:s.lon,t:+(s.v.currentTime||0).toFixed(2),rs:s.v.readyState,p:s.v.paused,rate:s.v.playbackRate,T:s.T,armed:!!s.armed,started:!!s.started,lead:s.lead,rtt:window.__rtt})),err:lastErr,badge:$('hqBadge').textContent});
 setInterval(()=>{if(multi)multi.slots.forEach(sl=>slotArmCheck(sl,performance.now()));},20);
 /* 再生位置が「読み込んだ映像のすき間」に入って止まったら、映像のある所まで飛ばす（Safariは先頭の小さなすき間で止まることがある） */
-{let stuck=0;setInterval(()=>{if(video.paused||video.seeking||video.readyState>=3){stuck=0;return;}
+{let stuck=0;setInterval(()=>{if(video.seeking||video.readyState>=3){stuck=0;return;}
   const b=video.buffered,t=video.currentTime||0;if(!b.length){stuck=0;return;}
   let inside=false,next=null;for(let i=0;i<b.length;i++){if(b.start(i)<=t+0.01&&b.end(i)>t+0.1)inside=true;if(b.start(i)>t&&next===null)next=b.start(i);}
   if(inside){stuck=0;return;}stuck+=250;
