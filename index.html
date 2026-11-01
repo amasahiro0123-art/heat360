@@ -407,7 +407,7 @@ function baseDur(){return video.duration&&isFinite(video.duration)?video.duratio
 function relT(T){const D=baseDur();let d=T-(video.currentTime||0);if(D<1e8){if(d>D/2)d-=D;if(d<-D/2)d+=D;}return d;}   // 土台から見て T まであと何秒か
 function slotLoad(s){   // 「待ち合わせ」方式：回線速度から見込み時間を出し、その2倍先を待ち合わせ時刻にして、その時刻に土台と同時に再生を始める
   if(s.h){s.h.destroy();s.h=null;}s.v.pause();s.v.playbackRate=1;s.bad=0;s.loadedAt=performance.now();s.armed=false;s.started=false;s.ready=false;
-  const lead=Math.min(8,Math.max(0.4,segFetchSec(s)*2+(window.__missAdd||0)));   // 回線速度に比例して変わる
+  const lead=Math.min(8,Math.max(0.4,Math.max(segFetchSec(s),window.__loadLat||0)*2+(window.__missAdd||0)));   // 回線速度の見込みと、実際に準備できるまでの実測の大きいほう×2   // 回線速度に比例して変わる
   const D=baseDur();let T=(video.currentTime||0)+lead;
   if(D<1e8&&T>=D-0.3)T=(window.__segOff||0.1)+Math.max(0,T-D);   // 最後をまたぐときは先頭側で待ち合わせ
   s.T=T;s.lead=lead;
