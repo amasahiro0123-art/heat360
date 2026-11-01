@@ -384,7 +384,9 @@ function slotStop(sl){if(sl.h){sl.h.destroy();sl.h=null;}sl.v.pause();sl.v.remov
 function setupMulti(cfgM){
   teardownMulti();
   if(!window.__slots)window.__slots=[newSlot(0),newSlot(1)];
-  multi={cfg:cfgM,slots:window.__slots,cur:-1,pending:null,lastSync:0,fade:null};
+  let cfg=cfgM;
+  if(cfgM.sets){const o=(innerHeight>innerWidth)?'portrait':'landscape';cfg=Object.assign({base:cfgM.base,orient:o},cfgM.sets[o]||cfgM.sets.landscape||cfgM.sets.portrait);}
+  multi={cfg,slots:window.__slots,cur:-1,pending:null,lastSync:0,fade:null};
   multi.slots.forEach(slotStop);
   $('hqBadge').hidden=false;$('hqBadge').textContent='高画質エリア：読み込み中';
 }
@@ -406,7 +408,7 @@ function activateTile(idx){
   s.mat.opacity=0;s.mesh.visible=true;s.mesh.renderOrder=2;multi.slots[1-idx].mesh.renderOrder=1;
   multi.fade={idx,old:multi.cur,start:performance.now()};
   multi.cur=idx;
-  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||s.lon+'°');
+  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||s.lon+'°')+(multi.cfg.orient?(multi.cfg.orient==='portrait'?'（縦用）':'（横用）'):'');
 }
 function syncTo(v,now){   // 土台との再生位置のずれを0.1秒以内に保つ（速度を少し変えてなめらかに追いつかせる）
   if(video.paused&&!v.paused)v.pause();else if(!video.paused&&v.paused)v.play().catch(()=>{});
@@ -626,7 +628,13 @@ const strip=$('compassStrip');const PX=2.2;
   h+=`<span class="${n%90===0?'major':''}" style="left:${(a+540)*PX}px">${lab}</span>`;}strip.innerHTML=h;})();
 
 /* ---------- ループ ---------- */
-function resize(){const p=isPortrait();if(p!==wasPortrait){st.tFov=clampFov(st.tFov*(p?95/70:70/95));wasPortrait=p;}const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+function showReconnect(){const c=$('connecting');c.hidden=false;c.classList.remove('fade');c.style.opacity='1';
+  ['spName','spCopy','spTeam','spSponsor'].forEach(id=>{const e=$(id);if(e)e.classList.add('on');});
+  const w=$('spWait');w.textContent='CONNECTING…';w.classList.add('on','blink');}
+function resize(){const p=isPortrait();
+  if(multi&&multi.cfg.orient&&p!==(multi.cfg.orient==='portrait')){   // 向きが変わったら、その向き用の映像で読み直す
+    if(!window.__reloading){window.__reloading=true;showReconnect();teardownMulti();setTimeout(()=>location.reload(),350);}return;}
+  if(p!==wasPortrait){st.tFov=clampFov(st.tFov*(p?95/70:70/95));wasPortrait=p;}const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
 window.addEventListener('resize',resize);resize();
 const fmt=(v,w,d)=>(v>=0?'+':'-')+Math.abs(v).toFixed(d).padStart(w,'0');
 const target=new THREE.Vector3();let prev=performance.now(),sampleT=0;
@@ -639,6 +647,8 @@ function frame(now){
   if(needCenter){st.tLon=st.lon=180;st.tLat=st.lat=0;needCenter=false;}
   if(multi&&multi.cfg.vfov){                  // 試作版：画面の上下が高画質の範囲から出ないようにする
     const V=multi.cfg.vfov;st.tFov=Math.min(st.tFov,V-8);
+    const step=360/multi.cfg.tiles.length,halfHmax=(multi.cfg.hfov-step)/2-3;   // 切り替えまでの間も横がはみ出さない画角
+    if(halfHmax>5){const vmax=2*THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(halfHmax))/camera.aspect));st.tFov=Math.min(st.tFov,vmax);}
     const limV=Math.max(0,V/2-st.tFov/2*1.06-2);st.tLat=Math.max(-limV,Math.min(limV,st.tLat));
   }
   if(RANGE.h<360||RANGE.v<180){              // 映像の外（黒い部分）が見えないように制限
