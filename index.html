@@ -379,7 +379,7 @@ runSplash();
       if(!probe&&currentEntry&&currentEntry.hls){probe='…';const u=currentEntry.hls,ts=performance.now();
         fetch(u,{cache:'no-store'}).then(r=>r.text().then(t=>{probe=r.status+' '+(r.headers.get('content-type')||'')+' '+t.length+'B '+Math.round(performance.now()-ts)+'ms '+(t.startsWith('#EXTM3U')?'ok':'NG:'+t.slice(0,40));})).catch(e=>{probe='ERR '+e.message;});}
       const ua=navigator.userAgent;const br=/CriOS/.test(ua)?'ChromeiOS':/FxiOS/.test(ua)?'FirefoxiOS':/Safari/.test(ua)&&!/Chrome/.test(ua)?'Safari':'other';
-      $('spDiag').textContent=br+' mms'+(window.ManagedMediaSource?1:0)+' mse'+(window.MediaSource?1:0)+' hls'+(window.Hls&&Hls.isSupported()?1:0)+' rs'+video.readyState+' ns'+video.networkState+(video.error?' verr'+video.error.code:'')+'\nev '+JSON.stringify(window.__hev||{})+'\nerr '+(lastErr||'-')+'\nprobe '+(probe||'-');}
+      $('spDiag').textContent=br+' mms'+(window.ManagedMediaSource?1:0)+' mse'+(window.MediaSource?1:0)+' hls'+(window.Hls&&Hls.isSupported()?1:0)+' rs'+video.readyState+' ns'+video.networkState+(video.error?' verr'+video.error.code:'')+' t'+(video.currentTime||0).toFixed(2)+' buf'+JSON.stringify(Array.from({length:video.buffered.length},(_,i)=>[+video.buffered.start(i).toFixed(2),+video.buffered.end(i).toFixed(2)]))+'\nev '+JSON.stringify(window.__hev||{})+'\nerr '+(lastErr||'-')+'\nprobe '+(probe||'-');}
     setTimeout(tick,1000);};setTimeout(tick,1000);})();
 setTimeout(()=>{if(!videoReady&&!$('connecting').hidden&&REMOTE)showLoadError();},25000);
 /* ---------- 方向切り替え（低画質の全周を土台に、見ている方向の高画質版を重ねる） ---------- */
@@ -488,6 +488,12 @@ function syncTo(v,now,sl){   // 土台との再生位置のずれを0.1秒以内
 window.__camDebug=()=>({entry:currentEntry&&currentEntry.label,baseT:+(video.currentTime||0).toFixed(2),baseRS:video.readyState,lon:+st.lon.toFixed(1),
   cur:multi&&multi.cur,pending:multi&&multi.pending,spd:multi&&Math.round(multi.spd||0),lastSec:multi&&multi.lastSec,lat:window.__loadLat&&+window.__loadLat.toFixed(2),bwMbps:window.__bw&&+(window.__bw*8/1e6).toFixed(1),slots:multi&&multi.slots.map(s=>({lon:s.lon,t:+(s.v.currentTime||0).toFixed(2),rs:s.v.readyState,p:s.v.paused,rate:s.v.playbackRate,T:s.T,armed:!!s.armed,started:!!s.started,lead:s.lead,rtt:window.__rtt})),err:lastErr,badge:$('hqBadge').textContent});
 setInterval(()=>{if(multi)multi.slots.forEach(sl=>slotArmCheck(sl,performance.now()));},20);
+/* 再生位置が「読み込んだ映像のすき間」に入って止まったら、映像のある所まで飛ばす（Safariは先頭の小さなすき間で止まることがある） */
+{let stuck=0;setInterval(()=>{if(video.paused||video.seeking||video.readyState>=3){stuck=0;return;}
+  const b=video.buffered,t=video.currentTime||0;if(!b.length){stuck=0;return;}
+  let inside=false,next=null;for(let i=0;i<b.length;i++){if(b.start(i)<=t+0.01&&b.end(i)>t+0.1)inside=true;if(b.start(i)>t&&next===null)next=b.start(i);}
+  if(inside){stuck=0;return;}stuck+=250;
+  if(stuck>=500&&next!==null&&next-t<3){try{video.currentTime=next+0.05;}catch(e){}stuck=0;}},250);}
 /* ---------- 試合まるごと用：シークバー（画面をタップすると出る） ---------- */
 const fmtT=x=>{x=Math.max(0,Math.floor(x||0));const h=Math.floor(x/3600),m=Math.floor(x%3600/60),sec=x%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(sec).padStart(2,'0');};
 const isLong=()=>isFinite(video.duration)&&video.duration>120;
@@ -599,7 +605,7 @@ function attachVideo(src,remote,entry){
   if(hls){hls.destroy();hls=null;}
   const useHls=entry&&entry.hls&&window.Hls&&Hls.isSupported();
   if(useHls){
-    hls=new Hls({maxBufferLength:30,maxMaxBufferLength:60,capLevelToPlayerSize:false,startLevel:-1,startFragPrefetch:true});
+    hls=new Hls({maxBufferLength:20,maxMaxBufferLength:40,maxBufferHole:0.5,nudgeMaxRetry:6,capLevelToPlayerSize:false,startLevel:-1,startFragPrefetch:true});
     hls.on(Hls.Events.MANIFEST_PARSED,()=>pickLevel());hls.on(Hls.Events.FRAG_LOADED,(e,d)=>noteFrag(d));window.__hlog=[];['MEDIA_ATTACHED','MANIFEST_LOADED','MANIFEST_PARSED','LEVEL_LOADED','FRAG_LOADED','FRAG_BUFFERED'].forEach(n=>hls.on(Hls.Events[n],()=>{window.__hev=window.__hev||{};window.__hev[n]=(window.__hev[n]||0)+1;}));
     hls.on(Hls.Events.ERROR,(ev,d)=>{
       lastErr=(d.type||'')+'/'+(d.details||'')+(d.response&&d.response.code?'/'+d.response.code:'');
