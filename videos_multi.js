@@ -1,6 +1,6 @@
 // 試合まるごと（映像はCloudflare R2に置いています）
 window.CAM360_VIDEOS_MULTI = [
-  { label: '試合まるごと', chapters: [], multi: { base: 'https://cdn360.hometetsu.com/FULL/base/index.m3u8', sets: {
+  { label: '試合まるごと', recordedAt: '2026-10-31T12:56:24+09:00', chapters: [], multi: { base: 'https://cdn360.hometetsu.com/FULL/base/index.m3u8', sets: {
       portrait: { hfov: 110, vfov: 120, tiles: [
         { lon: 180, hls: 'https://cdn360.hometetsu.com/FULL/p/d180/index.m3u8' },
         { lon: 225, hls: 'https://cdn360.hometetsu.com/FULL/p/d225/index.m3u8' },

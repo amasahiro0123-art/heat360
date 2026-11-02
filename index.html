@@ -34,6 +34,8 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:
 .bl{bottom:calc(16px + env(safe-area-inset-bottom,0px));left:max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:3px}
 .live{display:inline-flex;align-items:center;gap:6px;font-weight:600;background:rgba(0,0,0,.45);padding:3px 8px 3px 7px;border-radius:3px;width:max-content}
 .live i{width:8px;height:8px;border-radius:50%;background:var(--live);animation:blink 1.2s steps(2,start) infinite}
+.live.replay i{width:0;height:0;border-radius:0;background:none;border-left:8px solid #e8eef0;border-top:5px solid transparent;border-bottom:5px solid transparent;animation:none}
+.live.replay{color:#e8eef0}
 @keyframes blink{to{visibility:hidden}}
 .dim{color:var(--dim)}
 #hqBadge{color:#ffd166}
@@ -136,7 +138,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 <div id="compass"><div id="compassStrip"></div></div>
 
 <div class="hud tl">
-  <span class="live" id="liveBadge"><i></i>LIVE</span>
+  <span class="live" id="liveBadge"><i></i><b id="liveText" style="font-weight:600">LIVE</b></span>
   <span id="camName">CAM-01 ・ 360°</span>
   <span class="sample" id="srcLabel" hidden>サンプル映像</span>
   <span id="hqBadge" hidden></span>
@@ -205,7 +207,7 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
     <div class="row"><div>上向きの限界</div><input type="range" id="tiltMax" min="0" max="90" value="45"></div>
     <div class="row"><div>指を離した後も少し流れる</div><input type="checkbox" class="switch" id="inertia" checked></div>
     <div class="row"><div>ジョイスティック</div><input type="checkbox" class="switch" id="joyOn" checked></div>
-    <div class="row"><div>LIVE表示</div><input type="checkbox" class="switch" id="liveOn" checked></div>
+    <div class="row"><div>LIVE / REPLAY表示<small>録画は「REPLAY」と撮影時刻、ライブ配信は「LIVE」と現在時刻を表示</small></div><input type="checkbox" class="switch" id="liveOn" checked></div>
     <div class="row"><div>画面の文字表示（HUD）</div><input type="checkbox" class="switch" id="hudOn" checked></div>
     <div class="row"><div>高画質エリアの表示<small>今どの方向を高画質で見ているか・切り替わりの秒数</small></div><input type="checkbox" class="switch" id="hqOn"></div>
     <div class="row"><div>カメラ名</div><input type="text" id="camInput" value="CAM-01 ・ 360°" style="width:46%;font:inherit;color:var(--fg);background:#1a2125;border:1px solid var(--line);border-radius:6px;padding:6px 8px"></div>
@@ -859,10 +861,13 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-function tick(){const d=new Date(),p=n=>String(n).padStart(2,'0');
+function recAt(){const r=(currentEntry&&currentEntry.recordedAt)||CONFIG.recordedAt;return r?Date.parse(r):NaN;}
+function tick(){const p=n=>String(n).padStart(2,'0');const rs=recAt();const replay=isFinite(rs);
+  $('liveBadge').classList.toggle('replay',replay);$('liveText').textContent=replay?'REPLAY':'LIVE';
+  const d=replay?new Date(rs+(video.currentTime||0)*1000):new Date();   // 録画は「撮影したときの時刻」、ライブは今の時刻
   $('clock').textContent=`${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
   $('date').textContent=`${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())}`;}
-tick();setInterval(tick,1000);
+tick();setInterval(tick,500);
 })();
 </script>
 </body>
