@@ -392,12 +392,15 @@ function fsUpdate(){$('fsIco').setAttribute('d',fsEl()?'M9 4v5H4M15 4v5h5M9 20v-
    if(req&&(document.fullscreenEnabled||document.webkitFullscreenEnabled)){try{const r=req.call(de,{navigationUI:'hide'});if(r&&r.catch)r.catch(()=>showA2HS(true));}catch(e){showA2HS(true);}}
    else showA2HS(true);};
  document.addEventListener('fullscreenchange',fsUpdate);document.addEventListener('webkitfullscreenchange',fsUpdate);}
-function showA2HS(force){const ios=/iPhone|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);if(!ios){toast('この端末では全画面にできませんでした');return;}const b=$('a2hs');b.hidden=false;$('a2hsX').onclick=()=>{b.hidden=true;if(!force){try{localStorage.setItem('cam360a2hs','9');}catch(e){}}};clearTimeout(window.__a2t);window.__a2t=setTimeout(()=>{b.hidden=true;},15000);}
-function maybeA2HS(){try{const ios=/iPhone|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
-  const standalone=navigator.standalone||matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches;
-  if(!ios||standalone)return;let n=0;try{n=+(localStorage.getItem('cam360a2hs')||0);}catch(e){}if(n>=3)return;
-  try{localStorage.setItem('cam360a2hs',String(n+1));}catch(e){}
+function showA2HS(force){window.__a2force=!!force;const ios=/iPhone|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);if(!ios){toast('この端末では全画面にできませんでした');return;}const b=$('a2hs');b.hidden=false;$('a2hsX').onclick=()=>{b.hidden=true;if(!force){try{localStorage.setItem('cam360a2hs','9');}catch(e){}}};clearTimeout(window.__a2t);window.__a2t=setTimeout(()=>{b.hidden=true;},15000);}
+function maybeA2HS(){try{   // iPhoneのSafariで、横向きにしたときだけ「ホーム画面に追加」を案内（1回の表示につき1度、最大3回）
+  const ios=/iPhone|iPod/.test(navigator.userAgent);if(!ios||isStandalone()||window.__a2shown)return;
+  if(!(innerWidth>innerHeight))return;
+  let n=0;try{n=+(localStorage.getItem('cam360a2hs')||0);}catch(e){}if(n>=3)return;
+  window.__a2shown=true;try{localStorage.setItem('cam360a2hs',String(n+1));}catch(e){}
   const b=$('a2hs');b.hidden=false;$('a2hsX').onclick=()=>{b.hidden=true;try{localStorage.setItem('cam360a2hs','9');}catch(e){}};setTimeout(()=>{b.hidden=true;},12000);}catch(e){}}
+{const chk=()=>{if(videoReady&&$('connecting').hidden)setTimeout(maybeA2HS,600);};addEventListener('resize',chk);addEventListener('orientationchange',chk);}
+{const portraitHide=()=>{if(innerWidth<=innerHeight&&!window.__a2force)$('a2hs').hidden=true;};addEventListener('resize',portraitHide);}
 function showLoadError(){$('start').hidden=true;const w=$('spWait');w.classList.remove('blink');w.classList.add('on');
   const diag=(lastErr||'timeout')+' / rs'+video.readyState+' / mse'+(!!(window.MediaSource||window.ManagedMediaSource)?1:0)+' / hls'+(window.Hls&&Hls.isSupported()?1:0);
   w.innerHTML='映像を読み込めませんでした<div style="font-size:10px;letter-spacing:0;color:#889;margin-top:6px;font-family:monospace;white-space:normal;word-break:break-all;max-width:88vw;margin-left:auto;margin-right:auto">'+diag+'</div><button id="reloadBtn" style="margin-top:14px;font:inherit;font-size:14px;letter-spacing:.1em;padding:10px 18px;border-radius:999px;border:1px solid #9aa4a8;background:transparent;color:#fff;pointer-events:auto">再読み込み</button>';
