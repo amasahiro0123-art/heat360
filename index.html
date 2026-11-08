@@ -74,7 +74,6 @@ body.hidden-ui #fsBtn{display:none}
 .sp-swap>*{grid-area:1/1}
 .sp-copy{position:absolute;left:0;right:0;bottom:calc(48px + env(safe-area-inset-bottom,0px));text-align:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:clamp(14.4px,4.32vw,19.2px);letter-spacing:.22em;color:#e3262e;padding-left:.22em}
 /* PC・横長で高さが足りない画面：間隔とロゴを詰める */
-@media (min-aspect-ratio:1/1) and (max-height:820px){.sp-in{gap:10px;transform:translateY(-4vh)}.sp-wait{margin-top:12px}.sp-team{margin-top:24px;height:clamp(80px,17vh,140px)}.sp-copy{bottom:calc(30px + env(safe-area-inset-bottom,0px))}}
 .sp-sponsor{display:flex;flex-direction:column;align-items:center;gap:10px}
 .sp-by{font-family:'Montserrat',sans-serif;font-weight:600;font-size:12px;letter-spacing:.24em;color:#9aa4a8;text-transform:uppercase;padding-left:.24em}
 #spLogo{max-width:min(38.4vw,192px);max-height:64px;object-fit:contain}
@@ -131,6 +130,9 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 #start{position:fixed;inset:0;margin:auto;width:max-content;height:max-content;padding:16px 26px;font-size:16px;font-weight:700;background:var(--accent);color:#06201c;border:0;border-radius:999px;z-index:25}
 .hidden-ui .hud,.hidden-ui #compass,.hidden-ui #reticle{display:none}
 @media (prefers-reduced-motion:reduce){.live i{animation:none}#sheet{transition:none}}
+/* 横向き・低い画面の接続画面（基本の指定より後に置いて上書き） */
+@media (min-aspect-ratio:1/1) and (max-height:820px){.sp-in{gap:10px;transform:translateY(-4vh)}.sp-wait{margin-top:12px}.sp-team{margin-top:24px;height:clamp(80px,17vh,140px)}.sp-copy{bottom:calc(30px + env(safe-area-inset-bottom,0px))}}
+@media (min-aspect-ratio:1/1) and (max-height:520px){.sp-in{gap:6px;transform:translateY(-3vh)}.sp-name{font-size:clamp(26px,8vh,40px)}.sp-sponsor{gap:4px}#spLogo{max-height:36px}.sp-wait{margin-top:6px}.sp-team{margin-top:8px;height:clamp(48px,15vh,72px)}.sp-copy{bottom:calc(10px + env(safe-area-inset-bottom,0px))}}
 </style>
 
 <div id="stage" aria-label="360度映像。ドラッグで向きを変え、ピンチでズームします"></div>
@@ -364,6 +366,9 @@ if(CONFIG.teamLogo){const t=$('spTeam');t.src=CONFIG.teamLogo;t.hidden=false;t.o
 const hasSponsor=!!(CONFIG.sponsorLogo||CONFIG.sponsorName);
 if(CONFIG.sponsorLogo){$('spLogo').src=CONFIG.sponsorLogo;$('spLogo').hidden=false;$('spLogo').onerror=()=>{$('spLogo').hidden=true;};}
 if(CONFIG.sponsorName){$('spSName').textContent=CONFIG.sponsorName;$('spSName').hidden=false;}
+if(CONFIG.appName){$('spName').textContent=CONFIG.appName;document.title=CONFIG.appName;}   // チームごとのアプリ名
+if(CONFIG.copyText!=null)$('spCopy').textContent=CONFIG.copyText;
+if(CONFIG.copyColor)$('spCopy').style.color=CONFIG.copyColor;
 async function runSplash(){
   if($('connecting').hidden)return;
   await wait(50);

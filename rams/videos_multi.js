@@ -1,0 +1,1 @@
+window.CAM360_VIDEOS_MULTI = [];
