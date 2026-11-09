@@ -754,6 +754,9 @@ $('file').addEventListener('change',e=>{
 $('qualityBtn').onclick=()=>{quality=quality==='high'?'std':'high';try{localStorage.setItem('cam360q2',quality);}catch(e){}
   if(quality==='high'&&MAX_TEX<5760)toast('この端末は5.7Kを表示できないため、標準画質になります');pickLevel();toast(quality==='high'?'高画質(5.7K)にしました。カクつく場合は標準に戻してください':'標準画質(4K)にしました');};
 $('sound').onclick=()=>{video.muted=!video.muted;$('sound').textContent='音声：'+(video.muted?'オフ':'オン');if(!video.muted)video.play().catch(()=>{});};
+if(CONFIG.noAudio){   // 音声を出さない設定（チームごと）：ボタンを無効にし、何をしても消音のまま
+  const b=$('sound');b.textContent='音声：オフ（固定）';b.disabled=true;b.style.opacity='.5';b.onclick=null;
+  video.muted=true;video.addEventListener('volumechange',()=>{if(!video.muted)video.muted=true;});}
 $('playPause').onclick=()=>{if(video.paused){if(syncOn){const e=expectedTime();if(e!=null)video.currentTime=e;}video.play().catch(()=>{});$('playPause').textContent='一時停止';}else{video.pause();$('playPause').textContent='再生';}};
 
 /* ---------- 視点の状態 ---------- */

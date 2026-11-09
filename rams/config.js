@@ -7,6 +7,7 @@ window.CAM360_CONFIG = {
   frameLandscape: null,
   frameWide: null,
   hideHud: false,
+  noAudio: true,                         // 音声は出さない（ボタンも無効）
 
   // 読み込み画面
   appName: 'RAMOVE CAM',                 // 大きく出す名前（タブ名にも使う）
