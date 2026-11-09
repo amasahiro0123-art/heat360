@@ -560,7 +560,7 @@ function activateTile(idx){
   multi.fade={idx,old:multi.cur,start:performance.now()};multi.coolMs=2500;   // 高画質が取れたら待ち時間を元に戻す
   multi.cur=idx;
   const sec=multi.reqAt?((performance.now()-multi.reqAt)/1000).toFixed(1):null;multi.lastSec=sec;
-  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||dirName(s.lon))+(S===multi.zoom?'（ズーム用）':'（16:9）')+(sec?' '+sec+'秒':'')+(window.__bw?'（回線'+(window.__bw*8/1e6).toFixed(0)+'Mbps・'+(s.lead||0).toFixed(1)+'秒先で待ち合わせ）':'');
+  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||dirName(s.lon))+(S===multi.zoom?'（ズーム用）':(multi.cfg.orient==='portrait'?'（縦用）':'（16:9）'))+(sec?' '+sec+'秒':'')+(window.__bw?'（回線'+(window.__bw*8/1e6).toFixed(0)+'Mbps・'+(s.lead||0).toFixed(1)+'秒先で待ち合わせ）':'');
 }
 function syncTo(v,now,sl){   // 土台との再生位置のずれを0.1秒以内に保つ（速度を少し変えてなめらかに追いつかせる）
   if(sl&&!sl.started)return 9;
@@ -787,7 +787,7 @@ function hqMaxFov(){   // 高画質の範囲からはみ出さない一番広い
   const f=setFade(multi.cfg);let m=multi.cfg.vfov-2*f-2;const step=setStep(multi.cfg),halfHmax=(multi.cfg.hfov-step)/2-f-1;
   if(halfHmax>5)m=Math.min(m,2*THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(halfHmax))/camera.aspect)));
   return m;}
-const baseFov=()=>Math.min(70,hqMaxFov());   // 16:9の枠なので向きに関係なく同じ   // ズーム1.0倍＝一番引いた状態（高画質の範囲内）
+const baseFov=()=>Math.min(isPortrait()?95:70,hqMaxFov());   // 縦持ちは全画面、横持ち・PCは16:9の枠   // ズーム1.0倍＝一番引いた状態（高画質の範囲内）
 const st={lon:180,lat:0,tLon:180,tLat:0,fov:baseFov(),tFov:baseFov(),vLon:0,vLat:0,front:180};
 let wasPortrait=isPortrait();
 const cfg={lag:.55,tiltMin:-45,tiltMax:45,inertia:true};
@@ -880,8 +880,12 @@ const strip=$('compassStrip');const PX=2.2;
 function showReconnect(){const c=$('connecting');c.hidden=false;c.classList.remove('fade');c.style.opacity='1';
   ['spName','spCopy','spTeam','spSponsor'].forEach(id=>{const e=$(id);if(e)e.classList.add('on');});
   const w=$('spWait');w.textContent='CONNECTING…';w.classList.add('on','blink');}
-function box169(){const W=stage.clientWidth,H=stage.clientHeight;if(!W||!H)return [0,0];return W/H>16/9?[Math.round(H*16/9),H]:[W,Math.round(W*9/16)];}   // 画面に収まる一番大きな16:9
-function resize(){const [w,h]=box169();if(!w||!h)return;renderer.setSize(w,h,false);const c=renderer.domElement;c.style.width=w+'px';c.style.height=h+'px';camera.aspect=w/h;camera.updateProjectionMatrix();}
+function box169(){const W=stage.clientWidth,H=stage.clientHeight;if(!W||!H)return [0,0];if(H>W)return [W,H];   // 縦持ちは画面いっぱい
+  return W/H>16/9?[Math.round(H*16/9),H]:[W,Math.round(W*9/16)];}   // 画面に収まる一番大きな16:9
+function resize(){const p=isPortrait();
+  if(multi&&multi.cfg.orient&&p!==(multi.cfg.orient==='portrait')){   // 向きが変わったら、その向き用の映像で読み直す
+    if(!window.__reloading){window.__reloading=true;showReconnect();teardownMulti();setTimeout(()=>location.reload(),350);}return;}
+  const [w,h]=box169();if(!w||!h)return;renderer.setSize(w,h,false);const c=renderer.domElement;c.style.width=w+'px';c.style.height=h+'px';camera.aspect=w/h;camera.updateProjectionMatrix();}
 window.addEventListener('resize',resize);resize();
 /* iPhoneで画面を消して戻したとき・向きを変えたときに、サイズの変化が伝わらず縦横比がくずれることがあるので、こまめに確かめて直す */
 {const again=()=>[60,300,800,1500].forEach(ms=>setTimeout(()=>{resize();applyFrame();},ms));
