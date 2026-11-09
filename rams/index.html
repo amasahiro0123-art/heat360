@@ -133,6 +133,10 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 /* 横向き・低い画面の接続画面（基本の指定より後に置いて上書き） */
 @media (min-aspect-ratio:1/1) and (max-height:820px){.sp-in{gap:10px;transform:translateY(-4vh)}.sp-wait{margin-top:12px}.sp-team{margin-top:24px;height:clamp(80px,17vh,140px)}.sp-copy{bottom:calc(30px + env(safe-area-inset-bottom,0px))}}
 @media (min-aspect-ratio:1/1) and (max-height:520px){.sp-in{gap:6px;transform:translateY(-3vh)}.sp-name{font-size:clamp(26px,8vh,40px)}.sp-sponsor{gap:4px}#spLogo{max-height:36px}.sp-wait{margin-top:6px}.sp-team{margin-top:8px;height:clamp(48px,15vh,72px)}.sp-copy{bottom:calc(10px + env(safe-area-inset-bottom,0px))}}
+/* 長押し・ドラッグで文字や画像が選択状態（水色）にならないように */
+html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input,textarea,select{-webkit-user-select:auto;user-select:auto}
+img{-webkit-user-drag:none;user-drag:none}
 </style>
 
 <div id="stage" aria-label="360度映像。ドラッグで向きを変え、ピンチでズームします"></div>
@@ -891,6 +895,8 @@ function tick(){const p=n=>String(n).padStart(2,'0');const rs=recAt();const repl
   $('clock').textContent=`${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
   $('date').textContent=`${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())}`;}
 tick();setInterval(tick,500);
+document.addEventListener('selectstart',e=>{if(!(e.target.closest&&e.target.closest('input,textarea,select')))e.preventDefault();});   // 選択状態にしない
+document.addEventListener('contextmenu',e=>{if(!(e.target.closest&&e.target.closest('input,textarea,select')))e.preventDefault();});   // 長押しメニューを出さない
 })();
 </script>
 </body>
