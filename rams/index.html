@@ -216,6 +216,7 @@ img{-webkit-user-drag:none;user-drag:none}
     <div class="row"><div>LIVE / REPLAY表示<small>録画は「REPLAY」と撮影時刻、ライブ配信は「LIVE」と現在時刻を表示</small></div><input type="checkbox" class="switch" id="liveOn" checked></div>
     <div class="row"><div>画面の文字表示（HUD）</div><input type="checkbox" class="switch" id="hudOn" checked></div>
     <div class="row"><div>高精細表示（超解像）<small>ズームしたときのボケやギザギザを、スマホ側の処理で目立ちにくくする</small></div><input type="checkbox" class="switch" id="sharpOn"></div>
+<div class="row"><div>画質<small>自動：回線に合わせて 最高画質→高画質→低画質 を切り替え</small></div><select id="tierSel" style="font:inherit;background:var(--bg2,#1a2125);color:inherit;border:1px solid var(--line,#333);border-radius:6px;padding:4px 6px"><option value="auto">自動</option><option value="0">最高画質</option><option value="1">高画質</option><option value="low">低画質</option></select></div>
 <div class="row"><div>高画質エリアの表示<small>今どの方向を高画質で見ているか・切り替わりの秒数</small></div><input type="checkbox" class="switch" id="hqOn"></div>
     <div class="row"><div>カメラ名</div><input type="text" id="camInput" value="CAM-01 ・ 360°" style="width:46%;font:inherit;color:var(--fg);background:#1a2125;border:1px solid var(--line);border-radius:6px;padding:6px 8px"></div>
     <p class="note">公開URLで開くと、全員の再生位置が現在時刻に合わせて同期されます（一時停止しても再開時に今の位置へ戻ります）。<br>操作：1本指でスワイプして向きを変える／2本指でピンチ、または＋－ボタンでズーム／ジョイスティックで首振り。</p>
@@ -434,6 +435,19 @@ const dirName=l=>{const d=((l-180)%360+540)%360-180;return d===0?'正面':Math.a
 const MULTI_NAMES={180:'正面',225:'右前',270:'右',315:'右後ろ',0:'後ろ',45:'左後ろ',90:'左',135:'左前'};
 const SYNC_TOL=0.1;        // 土台とのずれの許容（秒）
 const FADE_MS=350;         // 高画質版の切り替えをなめらかにする時間
+/* 画質の段階：タイルに levels:[最高画質のURL, 高画質のURL…] があれば、回線に合わせて段階を選ぶ（だめなら土台＝低画質） */
+const TIER_NAMES=['最高画質','高画質'];
+const TIER_SEG0=[3.0e6,0.8e6];   // 1区切り(1秒)の大きさの初期見込み（実測で更新）
+let tierPref='auto';try{const t=localStorage.getItem('cam360tier');if(['auto','0','1','low'].includes(t))tierPref=t;}catch(e){}
+function nTiers(){const t=multi&&multi.cfg.tiles&&multi.cfg.tiles[0];return t&&t.levels?t.levels.length:1;}
+function tierName(l){return nTiers()>1?(TIER_NAMES[l]||'高画質'):'高画質';}
+function tileUrl(t,l){return t.levels?t.levels[Math.min(l,t.levels.length-1)]:t.hls;}
+function segB(l){return (multi&&multi.segB&&multi.segB[l])||TIER_SEG0[Math.min(l,TIER_SEG0.length-1)]||1.6e6;}
+function tierFits(l,margin){if(!window.__bw)return true;return (window.__rtt||0)+segB(l)/window.__bw<margin;}
+function chooseTier(margin){   // 使える一番良い段階（-1＝高画質なし）。手動指定と、回線待ちで下げた上限(cap)を守る
+  if(tierPref==='low')return -1;const n=nTiers();
+  if(tierPref!=='auto'){const l=Math.min(+tierPref,n-1);return tierFits(l,margin||0.85)?l:-1;}
+  for(let l=Math.max(0,Math.min(multi.cap||0,n-1));l<n;l++)if(tierFits(l,margin||0.85))return l;return -1;}
 function angDist(a,b){let d=((a-b)%360+540)%360-180;return Math.abs(d);}
 function edgeAlphaTex(){const c=document.createElement('canvas');c.width=256;c.height=128;const x=c.getContext('2d');
   const gh=x.createLinearGradient(0,0,256,0);gh.addColorStop(0,'#000');gh.addColorStop(.10,'#fff');gh.addColorStop(.90,'#fff');gh.addColorStop(1,'#000');
@@ -486,7 +500,7 @@ function setupMulti(cfgM){
   if(!window.__slots)window.__slots=[newSlot(0),newSlot(1)];
   let cfg=cfgM;
   if(cfgM.sets){const o=(innerHeight>innerWidth)?'portrait':'landscape';cfg=Object.assign({base:cfgM.base,orient:o},cfgM.sets[o]||cfgM.sets.landscape||cfgM.sets.portrait);}
-  multi={cfg,slots:window.__slots,cur:-1,pending:null,lastSync:0,fade:null};
+  multi={cfg,slots:window.__slots,cur:-1,pending:null,lastSync:0,fade:null,cap:0,segB:[],upAt:0,stableAt:0};
   multi.slots.forEach(slotStop);
   $('hqBadge').hidden=false;$('hqBadge').textContent='高画質エリア：読み込み中';
   // 各方向の一覧（再生リスト）を先に少しずつ取っておく（試合まるごとは一覧が大きいので、向きを変えたときの待ちを減らす）
@@ -515,7 +529,7 @@ function slotLoad(s){   // 「待ち合わせ」方式：回線速度から見�
   s.T=T;s.lead=lead;
   if(window.Hls&&Hls.isSupported()){
     s.h=new Hls({maxBufferLength:4,maxMaxBufferLength:8,startPosition:T,autoStartLoad:true});
-    s.h.on(Hls.Events.FRAG_LOADED,(e,d)=>{noteFrag(d);try{if(d.frag&&d.frag.stats&&d.frag.stats.loaded>2e5)s.segBytes=s.segBytes?s.segBytes*0.5+d.frag.stats.loaded*0.5:d.frag.stats.loaded;}catch(_){}});
+    s.h.on(Hls.Events.FRAG_LOADED,(e,d)=>{noteFrag(d);try{const b=d.frag&&d.frag.stats&&d.frag.stats.loaded;if(b>1e5){s.segBytes=s.segBytes?s.segBytes*0.5+b*0.5:b;if(multi){multi.segB=multi.segB||[];const l=s.level||0;multi.segB[l]=multi.segB[l]?multi.segB[l]*0.5+b*0.5:b;}}}catch(_){}});
     s.h.loadSource(s.url);s.h.attachMedia(s.v);
   }else{s.v.src=s.url;s.v.addEventListener('loadedmetadata',()=>{try{s.v.currentTime=T;}catch(e){}},{once:true});}
 }
@@ -536,9 +550,9 @@ function slotArmCheck(s,now){   // 細かく確認：待ち合わせ時刻に合
   }
   if(d<-0.5){window.__missAdd=Math.min(3,(window.__missAdd||0)+0.3);slotLoad(s);}   // 間に合わなかった→少し余裕を足してやり直し（成功すると戻る）
 }
-function requestTile(t){
+function requestTile(t,lvl){
   const idx=multi.cur===0?1:0,s=multi.slots[idx];
-  slotStop(s);multi.pending=t.lon;s.lon=t.lon;s.url=t.hls;slotLoad(s);
+  slotStop(s);multi.pending=t.lon;s.lon=t.lon;s.level=lvl||0;s.url=tileUrl(t,s.level);s.segBytes=segB(s.level);slotLoad(s);
 }
 function activateTile(idx){
   const s=multi.slots[idx];multi.pending=null;
@@ -547,7 +561,7 @@ function activateTile(idx){
   multi.fade={idx,old:multi.cur,start:performance.now()};
   multi.cur=idx;
   const sec=multi.reqAt?((performance.now()-multi.reqAt)/1000).toFixed(1):null;multi.lastSec=sec;
-  $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||dirName(s.lon))+(multi.cfg.orient?(multi.cfg.orient==='portrait'?'（縦用）':'（横用）'):'')+(sec?' '+sec+'秒':'')+(window.__bw?'（回線'+(window.__bw*8/1e6).toFixed(0)+'Mbps・'+(s.lead||0).toFixed(1)+'秒先で待ち合わせ）':'');
+  $('hqBadge').textContent=tierName(s.level||0)+'エリア：'+(MULTI_NAMES[s.lon]||dirName(s.lon))+(multi.cfg.orient?(multi.cfg.orient==='portrait'?'（縦用）':'（横用）'):'')+(sec?' '+sec+'秒':'')+(window.__bw?'（回線'+(window.__bw*8/1e6).toFixed(0)+'Mbps・'+(s.lead||0).toFixed(1)+'秒先で待ち合わせ）':'');
 }
 function syncTo(v,now,sl){   // 土台との再生位置のずれを0.1秒以内に保つ（速度を少し変えてなめらかに追いつかせる）
   if(sl&&!sl.started)return 9;
@@ -591,13 +605,15 @@ video.addEventListener('seeking',()=>{   // 再生位置を飛ばしたら、高
   if(!multi)return;multi.slots.forEach(slotStop);multi.cur=-1;multi.pending=null;multi.fade=null;
   $('hqBadge').textContent='高画質エリア：読み込み中';});   // 画面の描きかえとは別に、待ち合わせを細かく確認
 function bufAhead(v){const b=v.buffered,t=v.currentTime||0;for(let i=0;i<b.length;i++){if(b.start(i)<=t+0.05&&b.end(i)>t)return b.end(i)-t;}return 0;}
-function canHQ(){   // 高画質の1区切り(1秒分)を、1秒以内に余裕をもって取れる回線か（最初の応答の遅さも含めて判定）
-  if(!window.__bw)return true;const seg=(multi&&multi.slots.find(x=>x.segBytes)||{}).segBytes||1.6e6;
-  return (window.__rtt||0)+seg/window.__bw<0.85;}
+function canHQ(){return !!multi&&chooseTier()>=0;}   // どれかの段階の1区切り(1秒分)を、1秒以内に余裕をもって取れる回線か
 function bwText(){return window.__bw?'（回線'+(window.__bw*8/1e6).toFixed(0)+'Mbps・応答'+((window.__rtt||0)*1000).toFixed(0)+'ms）':'';}
-function dropHQ(now){if(!multi)return;multi.slots.forEach(slotStop);multi.cur=-1;multi.pending=null;multi.fade=null;
+function dropHQ(now){if(!multi)return;
+  const curL=multi.cur>=0?(multi.slots[multi.cur].level||0):0,lon=multi.cur>=0?multi.slots[multi.cur].lon:null;
+  multi.slots.forEach(slotStop);multi.cur=-1;multi.pending=null;multi.fade=null;multi.stableAt=now;
+  if(tierPref==='auto'&&curL<nTiers()-1){multi.cap=curL+1;multi.upAt=now+20000;   // 1段下げて、同じ方向をすぐ読み直す
+    $('hqBadge').textContent=tierName(multi.cap)+'エリア：回線に合わせて画質を下げています'+bwText();return;}
   multi.coolMs=Math.min(60000,(multi.coolMs||2500)*2);multi.coolUntil=now+multi.coolMs;
-  $('hqBadge').textContent='高画質エリア：回線待ち（標準画質で再生中）'+bwText();}
+  $('hqBadge').textContent='低画質で再生中（回線待ち）'+bwText();}
 function multiTick(now){
   if(!multi||!multi.cfg.tiles||!multi.cfg.tiles.length)return;
   const L=((st.lon%360)+360)%360;
@@ -623,10 +639,18 @@ function multiTick(now){
   if(multi.pending===null&&!multi.fade&&(settled||coasting||curLon===null)&&now>=(multi.coolUntil||0)){
     const need=curLon===null||(target.lon!==curLon&&angDist(settled?L:settleLon,curLon)>360/multi.cfg.tiles.length/2+5);
     if(need&&video.readyState>=2){
-      if(!canHQ()||baseAhead<3){if(curLon===null)$('hqBadge').textContent='高画質エリア：回線が遅いため標準画質で再生中'+bwText();multi.coolUntil=now+3000;}
-      else{multi.reqAt=now;requestTile(target);}
+      const lv=chooseTier();
+      if(lv<0||baseAhead<3){if(curLon===null)$('hqBadge').textContent=(tierPref==='low'?'低画質で再生中（設定）':'低画質で再生中（回線が遅いため）'+bwText());multi.coolUntil=now+3000;}
+      else{multi.reqAt=now;requestTile(target,lv);}
     }
   }
+  // 回線に余裕が出てきたら、止まっている間に同じ方向を1段上の画質で読み直す（下げてから20秒後・余裕を持って判定）
+  if(multi.pending===null&&!multi.fade&&curLon!==null&&settled&&now>=(multi.upAt||0)&&baseAhead>=4){
+    const curL=multi.slots[multi.cur].level||0;
+    if(tierPref==='auto'&&multi.cap>0&&now-(multi.stableAt||0)>20000)multi.cap--;   // しばらく安定したら上限を戻す
+    const lv=chooseTier(0.6);
+    if(lv>=0&&lv<curL){const t=multi.cfg.tiles.find(x=>x.lon===curLon);if(t){multi.reqAt=now;requestTile(t,lv);}}
+    multi.upAt=now+10000;}
   multi.slots.forEach(s=>slotArmCheck(s,now));
   if(now-multi.lastSync>150){multi.lastSync=now;
     multi.slots.forEach((s,i)=>{if(s.lon===null)return;if(!s.started)return;const d=syncTo(s.v,now,s);
@@ -840,6 +864,8 @@ $('inertia').onchange=e=>cfg.inertia=e.target.checked;
 $('joyOn').onchange=e=>{joy.hidden=!e.target.checked;$('joyLabel').hidden=!e.target.checked;};
 $('liveOn').onchange=e=>$('liveBadge').hidden=!e.target.checked;
 $('hudOn').onchange=e=>document.body.classList.toggle('hidden-ui',!e.target.checked);
+{$('tierSel').value=tierPref;$('tierSel').onchange=e=>{tierPref=e.target.value;try{localStorage.setItem('cam360tier',tierPref);}catch(_){}
+  if(multi){multi.slots.forEach(slotStop);multi.cur=-1;multi.pending=null;multi.fade=null;multi.cap=0;multi.coolUntil=0;}};}
 {let sh=true;try{sh=localStorage.getItem('cam360sr')!=='0';}catch(e){}$('sharpOn').checked=sh;setSharp(sh);
  $('sharpOn').onchange=e=>{setSharp(e.target.checked);try{localStorage.setItem('cam360sr',e.target.checked?'1':'0');}catch(_){}};}
 {let on=false;try{on=localStorage.getItem('cam360hq')==='1';}catch(e){}$('hqOn').checked=on;document.body.classList.toggle('hqoff',!on);
