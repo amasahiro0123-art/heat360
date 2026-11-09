@@ -1,5 +1,5 @@
 // 16:9テスト版（ラムズ8Kの3分間）。今のラムズ（../rams/?multi=1）と見比べるためのもの。映像はCloudflare R2の RAMS169
-// main：16:9の画面用 118°×81°・15°おき24本（cq15）／zoom：2倍以上ズームしたとき用 77°×55°・15°おき24本（cq13）。fadeは端のぼかしの幅（度）
+// main：16:9の画面用 118°×81°・15°おき24本（cq15）／zoom：2倍以上ズームしたとき用 77°×55°・15°おき24本（cq14・上限18M。z2＝軽くして作り直した版）。fadeは端のぼかしの幅（度）
 // recordedAt は「撮影開始13:00＋切り出し開始10分」。make_rams169.bat の START を変えたらここも直す
 window.CAM360_VIDEOS_MULTI = [
   { label: 'ラムズ 16:9テスト（3分）', recordedAt: '2026-11-08T13:10:00+09:00', chapters: [], multi: { base: 'https://cdn360.hometetsu.com/RAMS169/base/index.m3u8',
@@ -29,29 +29,29 @@ window.CAM360_VIDEOS_MULTI = [
         { lon: 150, hls: 'https://cdn360.hometetsu.com/RAMS169/m/d150/index.m3u8' },
         { lon: 165, hls: 'https://cdn360.hometetsu.com/RAMS169/m/d165/index.m3u8' } ],
       zoom: { hfov: 77, vfov: 55, fade: 4, tiles: [
-        { lon: 180, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d180/index.m3u8' },
-        { lon: 195, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d195/index.m3u8' },
-        { lon: 210, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d210/index.m3u8' },
-        { lon: 225, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d225/index.m3u8' },
-        { lon: 240, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d240/index.m3u8' },
-        { lon: 255, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d255/index.m3u8' },
-        { lon: 270, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d270/index.m3u8' },
-        { lon: 285, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d285/index.m3u8' },
-        { lon: 300, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d300/index.m3u8' },
-        { lon: 315, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d315/index.m3u8' },
-        { lon: 330, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d330/index.m3u8' },
-        { lon: 345, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d345/index.m3u8' },
-        { lon: 0, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d0/index.m3u8' },
-        { lon: 15, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d15/index.m3u8' },
-        { lon: 30, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d30/index.m3u8' },
-        { lon: 45, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d45/index.m3u8' },
-        { lon: 60, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d60/index.m3u8' },
-        { lon: 75, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d75/index.m3u8' },
-        { lon: 90, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d90/index.m3u8' },
-        { lon: 105, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d105/index.m3u8' },
-        { lon: 120, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d120/index.m3u8' },
-        { lon: 135, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d135/index.m3u8' },
-        { lon: 150, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d150/index.m3u8' },
-        { lon: 165, hls: 'https://cdn360.hometetsu.com/RAMS169/z/d165/index.m3u8' } ] }
+        { lon: 180, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d180/index.m3u8' },
+        { lon: 195, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d195/index.m3u8' },
+        { lon: 210, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d210/index.m3u8' },
+        { lon: 225, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d225/index.m3u8' },
+        { lon: 240, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d240/index.m3u8' },
+        { lon: 255, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d255/index.m3u8' },
+        { lon: 270, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d270/index.m3u8' },
+        { lon: 285, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d285/index.m3u8' },
+        { lon: 300, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d300/index.m3u8' },
+        { lon: 315, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d315/index.m3u8' },
+        { lon: 330, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d330/index.m3u8' },
+        { lon: 345, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d345/index.m3u8' },
+        { lon: 0, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d0/index.m3u8' },
+        { lon: 15, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d15/index.m3u8' },
+        { lon: 30, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d30/index.m3u8' },
+        { lon: 45, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d45/index.m3u8' },
+        { lon: 60, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d60/index.m3u8' },
+        { lon: 75, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d75/index.m3u8' },
+        { lon: 90, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d90/index.m3u8' },
+        { lon: 105, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d105/index.m3u8' },
+        { lon: 120, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d120/index.m3u8' },
+        { lon: 135, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d135/index.m3u8' },
+        { lon: 150, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d150/index.m3u8' },
+        { lon: 165, hls: 'https://cdn360.hometetsu.com/RAMS169/z2/d165/index.m3u8' } ] }
   } }
 ];

@@ -612,7 +612,7 @@ function multiTick(now){
   const L=((st.lon%360)+360)%360;
   const curS=multi.cur>=0?multi.slots[multi.cur]:null;
   // ズームして画面が小さくなったら、ズーム用（小さく高画質）の組を使う。今ズーム用なら収まる限り使い続ける（行ったり来たりしない）
-  const useZoom=!!multi.zoom&&setFits(multi.zoom,st.tFov,st.tLat,curS&&curS.set===multi.zoom?0:2);
+  const useZoom=!!multi.zoom&&now>=(multi.zoomOff||0)&&setFits(multi.zoom,st.tFov,st.tLat,curS&&curS.set===multi.zoom?0:2);
   const SET=useZoom?multi.zoom:multi.cfg;
   let best=SET.tiles[0];SET.tiles.forEach(t=>{if(angDist(L,t.lon)<angDist(L,best.lon))best=t;});
   const curLon=curS&&curS.set===SET?curS.lon:null;   // 使いたい組と違う組を表示中なら「まだ無い」扱い
@@ -634,7 +634,8 @@ function multiTick(now){
   const baseAhead=bufAhead(video);
   // 土台（全周）を最優先：土台の残りが少ないときは高画質の準備を取りやめる
   if(multi.pending!==null&&baseAhead<2&&!video.paused&&!multi.fade){const pi=multi.slots.findIndex(x=>x.key===multi.pending);if(pi>=0&&pi!==multi.cur)slotStop(multi.slots[pi]);multi.pending=null;}
-  if(multi.pending===null&&!multi.fade&&(settled||coasting||curLon===null)&&now>=(multi.coolUntil||0)){
+  const toZoomEarly=curS&&curS.set!==SET&&SET===multi.zoom&&!settled;   // 寄っている途中はズーム用を読みに行かない（今の高画質を見せ続ける）
+  if(multi.pending===null&&!multi.fade&&!toZoomEarly&&(settled||coasting||curLon===null)&&now>=(multi.coolUntil||0)){
     const need=curLon===null||(target.lon!==curLon&&angDist(settled?L:settleLon,curLon)>setStep(SET)/2+5);
     if(need&&video.readyState>=2){
       if(!canHQ()||baseAhead<3){if(curLon===null)$('hqBadge').textContent='高画質エリア：回線が遅いため標準画質で再生中'+bwText();multi.coolUntil=now+3000;}
@@ -648,6 +649,7 @@ function multiTick(now){
       // 高画質が回線に追いつけない（途中で止まる）、または土台の残りが減ってきたら、高画質を外して標準画質でなめらかに再生を続ける
       if(i===multi.cur&&!video.paused){const ta=bufAhead(s.v);
         if(ta<0.15&&!s.v.ended)s.starve=(s.starve||0)+150;else s.starve=0;
+        if(s.starve>600&&s.set===multi.zoom&&baseAhead>=1.5){multi.zoomOff=now+30000;slotStop(s);multi.cur=-1;multi.pending=null;multi.fade=null;return;}   // ズーム用が間に合わない→しばらく16:9用に戻す（高画質は外さない）
         if(s.starve>600||baseAhead<1.5){dropHQ(now);return;}
         if(now-(s.loadedAt||0)>20000)multi.coolMs=5000;}
       if(d>0.3||s.v.ended){s.bad=(s.bad||0)+150;}else s.bad=0;
