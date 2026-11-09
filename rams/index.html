@@ -762,7 +762,12 @@ $('playPause').onclick=()=>{if(video.paused){if(syncOn){const e=expectedTime();i
 /* ---------- 視点の状態 ---------- */
 /* 縦持ちは横の視野が狭く拡大されすぎるので、初期の画角を広めにする */
 const isPortrait=()=>innerHeight>innerWidth;
-const baseFov=()=>isPortrait()?95:70;
+function hqMaxFov(){   // 高画質の範囲からはみ出さない一番広い縦の画角（試作版のタイル構成から計算）
+  if(!(multi&&multi.cfg&&multi.cfg.vfov))return 999;
+  let m=multi.cfg.vfov-8;const step=360/multi.cfg.tiles.length,halfHmax=(multi.cfg.hfov-step)/2-3;
+  if(halfHmax>5)m=Math.min(m,2*THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(halfHmax))/camera.aspect)));
+  return m;}
+const baseFov=()=>Math.min(isPortrait()?95:70,hqMaxFov());   // ズーム1.0倍＝一番引いた状態（高画質の範囲内）
 const st={lon:180,lat:0,tLon:180,tLat:0,fov:baseFov(),tFov:baseFov(),vLon:0,vLat:0,front:180};
 let wasPortrait=isPortrait();
 const cfg={lag:.55,tiltMin:-45,tiltMax:45,inertia:true};
