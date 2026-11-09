@@ -440,7 +440,7 @@ function edgeAlphaTex(fh,fv){fh=fh||0.10;fv=fv||0.10;const c=document.createElem
   x.fillStyle=gh;x.fillRect(0,0,256,128);x.globalCompositeOperation='multiply';
   const gv=x.createLinearGradient(0,0,0,128);gv.addColorStop(0,'#000');gv.addColorStop(fv,'#fff');gv.addColorStop(1-fv,'#fff');gv.addColorStop(1,'#000');
   x.fillStyle=gv;x.fillRect(0,0,256,128);return new THREE.CanvasTexture(c);}
-const ZOOM_MAX=5;          // 最大ズーム（ズーム1.0倍＝一番引いた状態の何倍まで寄れるか）
+const ZOOM_MAX=3;          // 最大ズーム（ズーム1.0倍＝一番引いた状態の何倍まで寄れるか）
 function setFade(set){return set.fade||Math.max(1,(set.hfov||180)*0.10);}   // ぼかしの幅（度）
 function setTex(set){if(!set._tex){const f=setFade(set);set._tex=edgeAlphaTex(f/(set.hfov||180),f/(set.vfov||90));}return set._tex;}
 function setStep(set){return 360/set.tiles.length;}
@@ -829,13 +829,23 @@ stage.addEventListener('pointermove',e=>{if(e.pointerType==='touch')return;const
 const up=e=>{if(e.pointerType==='touch')return;pointers.delete(e.pointerId);
   if(!cfg.inertia||performance.now()-lastMove>80){st.vLon=st.vLat=0;}};
 stage.addEventListener('pointerup',up);stage.addEventListener('pointercancel',up);
-/* ズームボタン（押している間ズーム） */
+/* ズームボタン：1回押すと0.25倍ずつ。長押しすると押している間なめらかにズーム（最大3倍） */
 let zoomDir=0;
-[['zin',-1],['zout',1]].forEach(([id,d])=>{const b=$(id);
-  b.addEventListener('pointerdown',e=>{e.preventDefault();zoomDir=d;});
-  ['pointerup','pointerleave','pointercancel'].forEach(n=>b.addEventListener(n,()=>{zoomDir=0;}));
-  b.addEventListener('click',()=>{st.tFov=clampFov(st.tFov+d*6);});
+function zoomStep(d){const b=baseFov(),z=b/st.tFov,q=0.25;
+  let nz=d<0?Math.floor(z/q+1e-3)*q+q:Math.ceil(z/q-1e-3)*q-q;
+  nz=Math.max(1,Math.min(ZOOM_MAX,nz));st.tFov=clampFov(b/nz);}
+[['zin',-1],['zout',1]].forEach(([id,d])=>{const b=$(id);let t0=0,hold=null;
+  b.addEventListener('pointerdown',e=>{e.preventDefault();t0=performance.now();clearTimeout(hold);hold=setTimeout(()=>{zoomDir=d;},350);});
+  const end=e=>{clearTimeout(hold);hold=null;const wasHold=zoomDir!==0;zoomDir=0;
+    if(e.type==='pointerup'&&!wasHold&&performance.now()-t0<350)zoomStep(d);};
+  ['pointerup','pointerleave','pointercancel'].forEach(n=>b.addEventListener(n,end));
 });
+/* 見ている間は画面を暗くしない（対応している端末・ブラウザのみ） */
+let wakeLock=null;
+async function keepAwake(){try{if(!('wakeLock' in navigator)||document.hidden)return;if(wakeLock&&!wakeLock.released)return;wakeLock=await navigator.wakeLock.request('screen');}catch(e){}}
+['pointerdown','touchstart','keydown'].forEach(n=>addEventListener(n,keepAwake,{passive:true}));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)keepAwake();});
+video.addEventListener('play',keepAwake);keepAwake();
 stage.addEventListener('wheel',e=>{e.preventDefault();st.tFov=clampFov(st.tFov+e.deltaY*.03);},{passive:false});
 
 /* ジョイスティック */
@@ -928,7 +938,7 @@ function frame(now){
   if(usingSample){sampleT+=dt;drawSample(sampleT);sampleTex.needsUpdate=true;}
   renderer.render(scene,camera);
   let pan=((st.lon-st.front)%360+540)%360-180;
-  $('pan').textContent=fmt(pan,5,1)+'°';$('tilt').textContent=fmt(st.lat,4,1)+'°';$('zoom').textContent=(baseFov()/st.fov).toFixed(1)+'x';
+  $('pan').textContent=fmt(pan,5,1)+'°';$('tilt').textContent=fmt(st.lat,4,1)+'°';$('zoom').textContent=(baseFov()/st.fov).toFixed(2)+'x';
   strip.style.transform=`translateX(${-(pan+540)*PX+strip.parentElement.clientWidth/2}px)`;
   requestAnimationFrame(frame);
 }
