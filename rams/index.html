@@ -215,7 +215,7 @@ img{-webkit-user-drag:none;user-drag:none}
     <div class="row"><div>ジョイスティック</div><input type="checkbox" class="switch" id="joyOn" checked></div>
     <div class="row"><div>LIVE / REPLAY表示<small>録画は「REPLAY」と撮影時刻、ライブ配信は「LIVE」と現在時刻を表示</small></div><input type="checkbox" class="switch" id="liveOn" checked></div>
     <div class="row"><div>画面の文字表示（HUD）</div><input type="checkbox" class="switch" id="hudOn" checked></div>
-    <div class="row"><div>くっきり表示<small>高画質の映像の輪郭を少し強めて見やすくする</small></div><input type="checkbox" class="switch" id="sharpOn"></div>
+    <div class="row"><div>高精細表示（超解像）<small>ズームしたときのボケやギザギザを、スマホ側の処理で目立ちにくくする</small></div><input type="checkbox" class="switch" id="sharpOn"></div>
 <div class="row"><div>高画質エリアの表示<small>今どの方向を高画質で見ているか・切り替わりの秒数</small></div><input type="checkbox" class="switch" id="hqOn"></div>
     <div class="row"><div>カメラ名</div><input type="text" id="camInput" value="CAM-01 ・ 360°" style="width:46%;font:inherit;color:var(--fg);background:#1a2125;border:1px solid var(--line);border-radius:6px;padding:6px 8px"></div>
     <p class="note">公開URLで開くと、全員の再生位置が現在時刻に合わせて同期されます（一時停止しても再開時に今の位置へ戻ります）。<br>操作：1本指でスワイプして向きを変える／2本指でピンチ、または＋－ボタンでズーム／ジョイスティックで首振り。</p>
@@ -443,20 +443,34 @@ function edgeAlphaTex(){const c=document.createElement('canvas');c.width=256;c.h
 function sphereAt(lonC,h,v,r){const H=THREE.MathUtils.degToRad(h),V=THREE.MathUtils.degToRad(v);
   const g=new THREE.SphereGeometry(r,64,32,THREE.MathUtils.degToRad(lonC)-H/2,H,Math.PI/2-V/2,V);g.scale(-1,1,1);return g;}
 function newHqVideo(){const v=document.createElement('video');v.disableRemotePlayback=true;v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.crossOrigin='anonymous';v.loop=false;v.preload='auto';return v;}
-const SHARP={amt:0.45,on:true};   // くっきり表示：周り4点との差を足して輪郭を強める（映像の画素単位）
+const SHARP={amt:0.6,on:true};   // 高精細表示（超解像）：輪郭に沿ったなめらかな拡大＋にじみにくい輪郭強調。スマホ側で描くときに処理
 function addSharpen(mat,v){
-  const u={uTexel:{value:new THREE.Vector2(1/2048,1/2048)},uSharp:{value:SHARP.on?SHARP.amt:0}};mat.userData.sharp=u;
-  v.addEventListener('loadedmetadata',()=>{if(v.videoWidth)u.uTexel.value.set(1/v.videoWidth,1/v.videoHeight);});
+  const u={uTexSize:{value:new THREE.Vector2(2048,2048)},uSR:{value:SHARP.on?1:0},uSharp:{value:SHARP.amt}};mat.userData.sharp=u;
+  v.addEventListener('loadedmetadata',()=>{if(v.videoWidth)u.uTexSize.value.set(v.videoWidth,v.videoHeight);});
   mat.onBeforeCompile=sh=>{Object.assign(sh.uniforms,u);
-    sh.fragmentShader='uniform vec2 uTexel;uniform float uSharp;\n'+sh.fragmentShader.replace('#include <map_fragment>',
+    sh.fragmentShader=`uniform vec2 uTexSize;uniform float uSR;uniform float uSharp;
+vec4 srCubic(sampler2D t,vec2 uv){   // 3次補間（Catmull-Rom）：拡大したときのボケを減らす。9回の読み取りで16点ぶん
+  vec2 p=uv*uTexSize;vec2 p1=floor(p-0.5)+0.5;vec2 f=p-p1;
+  vec2 w0=f*(-0.5+f*(1.0-0.5*f));vec2 w1=1.0+f*f*(-2.5+1.5*f);vec2 w2=f*(0.5+f*(2.0-1.5*f));vec2 w3=f*f*(-0.5+0.5*f);
+  vec2 w12=w1+w2;vec2 p0=(p1-1.0)/uTexSize;vec2 p3=(p1+2.0)/uTexSize;vec2 p12=(p1+w2/w12)/uTexSize;
+  vec4 r=texture2D(t,vec2(p0.x,p0.y))*w0.x*w0.y+texture2D(t,vec2(p12.x,p0.y))*w12.x*w0.y+texture2D(t,vec2(p3.x,p0.y))*w3.x*w0.y
+        +texture2D(t,vec2(p0.x,p12.y))*w0.x*w12.y+texture2D(t,vec2(p12.x,p12.y))*w12.x*w12.y+texture2D(t,vec2(p3.x,p12.y))*w3.x*w12.y
+        +texture2D(t,vec2(p0.x,p3.y))*w0.x*w3.y+texture2D(t,vec2(p12.x,p3.y))*w12.x*w3.y+texture2D(t,vec2(p3.x,p3.y))*w3.x*w3.y;
+  return clamp(r,0.0,1.0);}
+vec3 srCAS(sampler2D t,vec2 uv,vec3 c){   // 明暗差に合わせて強さを変える輪郭強調（AMD CASと同じ考え方）。白いふち取りが出にくい
+  vec2 d=1.0/uTexSize;vec3 a=texture2D(t,uv+vec2(0.0,-d.y)).rgb,b=texture2D(t,uv+vec2(-d.x,0.0)).rgb,e=texture2D(t,uv+vec2(d.x,0.0)).rgb,g=texture2D(t,uv+vec2(0.0,d.y)).rgb;
+  vec3 mn=min(min(min(a,b),min(e,g)),c),mx=max(max(max(a,b),max(e,g)),c);
+  vec3 amp=sqrt(clamp(min(mn,1.0-mx)/max(mx,1e-4),0.0,1.0));vec3 w=amp*mix(-0.125,-0.2,uSharp);
+  return clamp((c+(a+b+e+g)*w)/(1.0+4.0*w),0.0,1.0);}
+`+sh.fragmentShader.replace('#include <map_fragment>',
       `#ifdef USE_MAP
-      vec4 texelColor=texture2D(map,vUv);
-      if(uSharp>0.0){vec3 nb=texture2D(map,vUv+vec2(uTexel.x,0.0)).rgb+texture2D(map,vUv-vec2(uTexel.x,0.0)).rgb+texture2D(map,vUv+vec2(0.0,uTexel.y)).rgb+texture2D(map,vUv-vec2(0.0,uTexel.y)).rgb;
-        texelColor.rgb=clamp(texelColor.rgb+uSharp*(texelColor.rgb*4.0-nb)*0.25,0.0,1.0);}
+      vec4 texelColor;
+      if(uSR>0.5){texelColor=srCubic(map,vUv);texelColor.rgb=srCAS(map,vUv,texelColor.rgb);}
+      else texelColor=texture2D(map,vUv);
       texelColor=mapTexelToLinear(texelColor);diffuseColor*=texelColor;
       #endif`);};
 }
-function setSharp(on){SHARP.on=on;if(typeof multi!=='undefined'&&multi&&multi.slots)multi.slots.forEach(x=>{const u=x.mat.userData.sharp;if(u)u.uSharp.value=on?SHARP.amt:0;});}
+function setSharp(on){SHARP.on=on;if(typeof multi!=='undefined'&&multi&&multi.slots)multi.slots.forEach(x=>{const u=x.mat.userData.sharp;if(u)u.uSR.value=on?1:0;});}
 function newSlot(i){
   if(!edgeTex)edgeTex=edgeAlphaTex();
   const v=newHqVideo();
@@ -818,8 +832,8 @@ $('inertia').onchange=e=>cfg.inertia=e.target.checked;
 $('joyOn').onchange=e=>{joy.hidden=!e.target.checked;$('joyLabel').hidden=!e.target.checked;};
 $('liveOn').onchange=e=>$('liveBadge').hidden=!e.target.checked;
 $('hudOn').onchange=e=>document.body.classList.toggle('hidden-ui',!e.target.checked);
-{let sh=true;try{sh=localStorage.getItem('cam360sharp')!=='0';}catch(e){}$('sharpOn').checked=sh;setSharp(sh);
- $('sharpOn').onchange=e=>{setSharp(e.target.checked);try{localStorage.setItem('cam360sharp',e.target.checked?'1':'0');}catch(_){}};}
+{let sh=true;try{sh=localStorage.getItem('cam360sr')!=='0';}catch(e){}$('sharpOn').checked=sh;setSharp(sh);
+ $('sharpOn').onchange=e=>{setSharp(e.target.checked);try{localStorage.setItem('cam360sr',e.target.checked?'1':'0');}catch(_){}};}
 {let on=false;try{on=localStorage.getItem('cam360hq')==='1';}catch(e){}$('hqOn').checked=on;document.body.classList.toggle('hqoff',!on);
  $('hqOn').onchange=e=>{document.body.classList.toggle('hqoff',!e.target.checked);try{localStorage.setItem('cam360hq',e.target.checked?'1':'0');}catch(_){}};}
 $('camInput').oninput=e=>$('camName').textContent=e.target.value;
