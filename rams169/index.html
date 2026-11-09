@@ -912,6 +912,7 @@ function frame(now){
   if(zoomDir)st.tFov=clampFov(st.tFov+zoomDir*45*dt);
   if(pointers.size===0&&!tLast&&(st.vLon||st.vLat)){st.tLon+=st.vLon;st.tLat=clampLat(st.tLat+st.vLat);st.vLon*=.93;st.vLat*=.93;
     if(Math.abs(st.vLon)<.005&&Math.abs(st.vLat)<.005)st.vLon=st.vLat=0;}
+  {const b=baseFov();if(st.lastBase&&Math.abs(b-st.lastBase)>0.01){const r=b/st.lastBase;st.tFov*=r;st.fov*=r;}st.lastBase=b;}   // 一番引いた画角が変わったら（読み込み直後・画面の大きさの変化）倍率を保ったまま合わせる＝開始は必ず1.00倍
   if(needCenter){st.tLon=st.lon=180;st.tLat=st.lat=0;needCenter=false;}
   if(multi&&multi.cfg.vfov){                  // 試作版：画面の上下が高画質の範囲から出ないようにする
     const V=multi.cfg.vfov,f=setFade(multi.cfg);st.tFov=Math.min(st.tFov,V-2*f-2);
