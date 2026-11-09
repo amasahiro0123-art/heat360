@@ -440,7 +440,7 @@ function edgeAlphaTex(fh,fv){fh=fh||0.10;fv=fv||0.10;const c=document.createElem
   x.fillStyle=gh;x.fillRect(0,0,256,128);x.globalCompositeOperation='multiply';
   const gv=x.createLinearGradient(0,0,0,128);gv.addColorStop(0,'#000');gv.addColorStop(fv,'#fff');gv.addColorStop(1-fv,'#fff');gv.addColorStop(1,'#000');
   x.fillStyle=gv;x.fillRect(0,0,256,128);return new THREE.CanvasTexture(c);}
-const ZOOM_MAX=3;          // 最大ズーム（ズーム1.0倍＝一番引いた状態の何倍まで寄れるか）
+const ZOOM_MAX=3;const DBG=/[?&]dbg=1/.test(location.search);   // 調べる用：倍率の横に内部の値を出す          // 最大ズーム（ズーム1.0倍＝一番引いた状態の何倍まで寄れるか）
 function setFade(set){return set.fade||Math.max(1,(set.hfov||180)*0.10);}   // ぼかしの幅（度）
 function setTex(set){if(!set._tex){const f=setFade(set);set._tex=edgeAlphaTex(f/(set.hfov||180),f/(set.vfov||90));}return set._tex;}
 function setStep(set){return 360/set.tiles.length;}
@@ -788,7 +788,7 @@ function hqMaxFov(){   // 高画質の範囲からはみ出さない一番広い
   if(halfHmax>5)m=Math.min(m,2*THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(halfHmax))/camera.aspect)));
   return m;}
 const baseFov=()=>Math.min(isPortrait()?95:70,hqMaxFov());   // 縦持ちは全画面、横持ち・PCは16:9の枠   // ズーム1.0倍＝一番引いた状態（高画質の範囲内）
-const st={lon:180,lat:0,tLon:180,tLat:0,fov:baseFov(),tFov:baseFov(),vLon:0,vLat:0,front:180};
+const st={lon:180,lat:0,tLon:180,tLat:0,fov:baseFov(),tFov:baseFov(),vLon:0,vLat:0,front:180};st.lastBase=st.tFov;   // 開始時の基準。読み込み後に基準が変わっても倍率（＝1.00）を保つ
 let wasPortrait=isPortrait();
 const cfg={lag:.55,tiltMin:-45,tiltMax:45,inertia:true};
 const clampLat=v=>Math.max(cfg.tiltMin,Math.min(cfg.tiltMax,v));
@@ -939,7 +939,7 @@ function frame(now){
   if(usingSample){sampleT+=dt;drawSample(sampleT);sampleTex.needsUpdate=true;}
   renderer.render(scene,camera);
   let pan=((st.lon-st.front)%360+540)%360-180;
-  $('pan').textContent=fmt(pan,5,1)+'°';$('tilt').textContent=fmt(st.lat,4,1)+'°';$('zoom').textContent=(baseFov()/st.fov).toFixed(2)+'x';
+  $('pan').textContent=fmt(pan,5,1)+'°';$('tilt').textContent=fmt(st.lat,4,1)+'°';$('zoom').textContent=(baseFov()/st.fov).toFixed(2)+'x'+(DBG?(' b'+baseFov().toFixed(1)+' f'+st.fov.toFixed(1)+' t'+st.tFov.toFixed(1)+' L'+(st.lastBase||0).toFixed(1)+' a'+camera.aspect.toFixed(2)+' '+innerWidth+'x'+innerHeight+' '+(multi&&multi.cfg?(multi.cfg.orient||'-')+multi.cfg.hfov:'nomulti')):'');
   strip.style.transform=`translateX(${-(pan+540)*PX+strip.parentElement.clientWidth/2}px)`;
   requestAnimationFrame(frame);
 }
