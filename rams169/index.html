@@ -508,7 +508,11 @@ function teardownMulti(){
 window.__bw=window.__bw||0;window.__rtt=window.__rtt||0;   // bytes/秒、最初の1バイトが届くまでの秒数
 function noteFrag(data){try{const st=(data.frag&&data.frag.stats)||data.stats;if(!st||!st.loaded)return;const l=st.loading||{};const ms=(l.end||0)-(l.start||0);if(ms<30)return;   // キャッシュから即時に来たものは除く
   const rtt=Math.max(0,((l.first||l.start)-(l.start||0))/1000),tx=Math.max(0.02,ms/1000-rtt);
-  const bw=st.loaded/tx;window.__bw=window.__bw?window.__bw*0.5+bw*0.5:bw;window.__rtt=window.__rtt?window.__rtt*0.5+rtt*0.5:rtt;}catch(e){}}
+  const bw=st.loaded/tx;
+  // CDNにまだない区切りは一時的に遅い（応答0.7〜1.5秒）。回線そのものの遅さと区別するため、最近10回のうち速い側の値を使う
+  const S=window.__netS=window.__netS||{rtt:[],bw:[]};S.rtt.push(rtt);S.bw.push(bw);if(S.rtt.length>10){S.rtt.shift();S.bw.shift();}
+  const q=(a,p)=>{const b=a.slice().sort((x,y)=>x-y);return b[Math.min(b.length-1,Math.floor((b.length-1)*p))];};
+  window.__rtt=q(S.rtt,0.25);window.__bw=q(S.bw,0.75);}catch(e){}}
 function segFetchSec(s){   // 高画質の1区切り分を取るのにかかる見込み時間（一覧・初期化・本体で3往復＋転送）
   const seg=(s&&s.segBytes)||1.4e6;if(!window.__bw)return 1.0;
   return 3*(window.__rtt||0.1)+seg/window.__bw;}
@@ -553,7 +557,7 @@ function activateTile(idx){
   const s=multi.slots[idx];multi.pending=null;
   const S=s.set||multi.cfg;s.mesh.geometry.dispose();s.mesh.geometry=sphereAt(s.lon,S.hfov||180,S.vfov||90,480-idx*2);s.mat.alphaMap=setTex(S);s.mat.needsUpdate=true;
   s.mat.opacity=0;s.mesh.visible=true;s.mesh.renderOrder=2;multi.slots[1-idx].mesh.renderOrder=1;
-  multi.fade={idx,old:multi.cur,start:performance.now()};
+  multi.fade={idx,old:multi.cur,start:performance.now()};multi.coolMs=2500;   // 高画質が取れたら待ち時間を元に戻す
   multi.cur=idx;
   const sec=multi.reqAt?((performance.now()-multi.reqAt)/1000).toFixed(1):null;multi.lastSec=sec;
   $('hqBadge').textContent='高画質エリア：'+(MULTI_NAMES[s.lon]||dirName(s.lon))+(S===multi.zoom?'（ズーム用）':'（16:9）')+(sec?' '+sec+'秒':'')+(window.__bw?'（回線'+(window.__bw*8/1e6).toFixed(0)+'Mbps・'+(s.lead||0).toFixed(1)+'秒先で待ち合わせ）':'');
@@ -605,7 +609,7 @@ function canHQ(){   // 高画質の1区切り(1秒分)を、1秒以内に余裕�
   return (window.__rtt||0)+seg/window.__bw<0.85;}
 function bwText(){return window.__bw?'（回線'+(window.__bw*8/1e6).toFixed(0)+'Mbps・応答'+((window.__rtt||0)*1000).toFixed(0)+'ms）':'';}
 function dropHQ(now){if(!multi)return;multi.slots.forEach(slotStop);multi.cur=-1;multi.pending=null;multi.fade=null;
-  multi.coolMs=Math.min(60000,(multi.coolMs||2500)*2);multi.coolUntil=now+multi.coolMs;
+  multi.coolMs=Math.min(10000,(multi.coolMs||2500)*2);   // 待ち時間は倍々で延ばすが最大10秒multi.coolUntil=now+multi.coolMs;
   $('hqBadge').textContent='高画質エリア：回線待ち（標準画質で再生中）'+bwText();}
 function multiTick(now){
   if(!multi||!multi.cfg.tiles||!multi.cfg.tiles.length)return;
